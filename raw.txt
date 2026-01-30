@@ -1,0 +1,101 @@
+Launching lib/main.dart on sdk gphone64 arm64 in debug mode...
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':flutter_plugin_android_lifecycle:compileDebugJavaWithJavac'.
+> Could not resolve all files for configuration ':flutter_plugin_android_lifecycle:androidJdkImage'.
+   > Failed to transform core-for-system-modules.jar to match attributes {artifactType=_internal_android_jdk_image, org.gradle.libraryelements=jar, org.gradle.usage=java-runtime}.
+      > Execution failed for JdkImageTransform: /Users/husnain/Library/Android/sdk/platforms/android-35/core-for-system-modules.jar.
+         > Error while executing process /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/jlink with arguments {--module-path /Users/husnain/.gradle/caches/transforms-3/3d83683b8447ff9220ea820812db70df/transformed/output/temp/jmod --add-modules java.base --output /Users/husnain/.gradle/caches/transforms-3/3d83683b8447ff9220ea820812db70df/transformed/output/jdkImage --disable-plugin system-modules}
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 36s
+Running Gradle task 'assembleDebug'...                             37.1s
+
+┌─ Flutter Fix ────────────────────────────────────────────────────────────┐
+│ [!] This is likely due to a known bug in Android Gradle Plugin (AGP)     │
+│ versions less than 8.2.1, when                                           │
+│   1. setting a value for SourceCompatibility and                         │
+│   2. using Java 21 or above.                                             │
+│ To fix this error, please upgrade your AGP version to at least 8.2.1.    │
+│ The version of AGP that your project uses is likely defined in:          │
+│ /Users/husnain/Documents/fl/zdelivery/android/settings.gradle,           │
+│ in the 'plugins' closure (by the number following                        │
+│ "com.android.application").                                              │
+│  Alternatively, if your project was created with an older version of the │
+│  templates, it is likely                                                 │
+│ in the buildscript.dependencies closure of the top-level build.gradle:   │
+│ /Users/husnain/Documents/fl/zdelivery/android/build.gradle,              │
+│ as the number following "com.android.tools.build:gradle:".               │
+│                                                                          │
+│ For more information, see:                                               │
+│ https://issuetracker.google.com/issues/294137077                         │
+│ https://github.com/flutter/flutter/issues/156304                         │
+└──────────────────────────────────────────────────────────────────────────┘
+Error: Gradle task assembleDebug failed with exit code 1
+husnain@MA-I711 zdelivery % flutter run 
+Launching lib/main.dart on sdk gphone64 arm64 in debug mode...
+
+Running Gradle task 'assembleDebug'...                                
+FAILURE: Build failed with an exception.
+Running Gradle task 'assembleDebug'...                                
+
+Running Gradle task 'assembleDebug'...                                
+* What went wrong:
+Running Gradle task 'assembleDebug'...                                
+Execution failed for task ':flutter_plugin_android_lifecycle:compileDebugJavaWithJavac'.
+Running Gradle task 'assembleDebug'...                                
+> Could not resolve all files for configuration ':flutter_plugin_android_lifecycle:androidJdkImage'.
+Running Gradle task 'assembleDebug'...                                
+   > Failed to transform core-for-system-modules.jar to match attributes {artifactType=_internal_android_jdk_image, org.gradle.libraryelements=jar, org.gradle.usage=java-runtime}.
+Running Gradle task 'assembleDebug'...                                
+      > Execution failed for JdkImageTransform: /Users/husnain/Library/Android/sdk/platforms/android-35/core-for-system-modules.jar.
+Running Gradle task 'assembleDebug'...                                
+         > Error while executing process /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/jlink with arguments {--module-path /Users/husnain/.gradle/caches/transforms-3/3d83683b8447ff9220ea820812db70df/transformed/output/temp/jmod --add-modules java.base --output /Users/husnain/.gradle/caches/transforms-3/3d83683b8447ff9220ea820812db70df/transformed/output/jdkImage --disable-plugin system-modules}
+Running Gradle task 'assembleDebug'...                                
+
+Running Gradle task 'assembleDebug'...                                
+* Try:
+Running Gradle task 'assembleDebug'...                                
+> Run with --stacktrace option to get the stack trace.
+Running Gradle task 'assembleDebug'...                                
+> Run with --info or --debug option to get more log output.
+Running Gradle task 'assembleDebug'...                                
+> Run with --scan to get full insights.
+Running Gradle task 'assembleDebug'...                                
+> Get more help at https://help.gradle.org.
+Running Gradle task 'assembleDebug'...                                
+
+Running Gradle task 'assembleDebug'...                                
+BUILD FAILED in 4s
+Running Gradle task 'assembleDebug'...                                    5.4s
+
+┌─ Flutter Fix ──────────────────────────────────────────────────────┐
+│ [!] This is likely due to a known bug in Android Gradle Plugin     │
+│ (AGP) versions less than 8.2.1, when                               │
+│   1. setting a value for SourceCompatibility and                   │
+│   2. using Java 21 or above.                                       │
+│ To fix this error, please upgrade your AGP version to at least     │
+│ 8.2.1. The version of AGP that your project uses is likely defined │
+│ in:                                                                │
+│ /Users/husnain/Documents/fl/zdelivery/android/settings.gradle,     │
+│ in the 'plugins' closure (by the number following                  │
+│ "com.android.application").                                        │
+│  Alternatively, if your project was created with an older version  │
+│  of the templates, it is likely                                    │
+│ in the buildscript.dependencies closure of the top-level           │
+│ build.gradle:                                                      │
+│ /Users/husnain/Documents/fl/zdelivery/android/build.gradle,        │
+│ as the number following "com.android.tools.build:gradle:".         │
+│                                                                    │
+│ For more information, see:                                         │
+│ https://issuetracker.google.com/issues/294137077                   │
+│ https://github.com/flutter/flutter/issues/156304                   │
+└────────────────────────────────────────────────────────────────────┘
+Error: Gradle task assembleDebug failed with exit code 1
