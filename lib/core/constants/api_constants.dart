@@ -22,6 +22,7 @@ class ApiConstants {
   // Orders
   static const String orders = '/delivery/orders/';
   static const String pendingOrders = '/delivery/orders/pending/';
+  static const String orderHistory = '/delivery/mobile/history/';
 
   static String orderDetail(int id) => '/delivery/orders/$id/';
   static String acceptOrder(int id) => '/delivery/orders/$id/accept/';

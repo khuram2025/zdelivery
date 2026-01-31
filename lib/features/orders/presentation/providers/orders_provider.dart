@@ -1,7 +1,24 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../profile/presentation/providers/profile_provider.dart';
 import '../../data/models.dart';
+
+String _extractErrorMessage(dynamic e, String defaultMessage) {
+  if (e is DioException) {
+    final responseData = e.response?.data;
+    if (responseData is Map) {
+      return responseData['error'] ?? responseData['message'] ?? defaultMessage;
+    }
+    if (e.type == DioExceptionType.connectionTimeout) {
+      return 'Connection timeout. Please check your internet.';
+    }
+    if (e.type == DioExceptionType.connectionError) {
+      return 'No internet connection.';
+    }
+  }
+  return defaultMessage;
+}
 
 final ordersProvider = StateNotifierProvider<OrdersNotifier, OrdersState>((ref) {
   return OrdersNotifier(ref.read(deliveryServiceProvider));
@@ -9,6 +26,10 @@ final ordersProvider = StateNotifierProvider<OrdersNotifier, OrdersState>((ref) 
 
 final pendingOrdersProvider = StateNotifierProvider<PendingOrdersNotifier, PendingOrdersState>((ref) {
   return PendingOrdersNotifier(ref.read(deliveryServiceProvider));
+});
+
+final orderHistoryProvider = StateNotifierProvider<OrderHistoryNotifier, OrderHistoryState>((ref) {
+  return OrderHistoryNotifier(ref.read(deliveryServiceProvider));
 });
 
 final orderDetailProvider = StateNotifierProvider.family<OrderDetailNotifier, OrderDetailState, int>((ref, orderId) {
@@ -121,6 +142,132 @@ class PendingOrdersNotifier extends StateNotifier<PendingOrdersState> {
   }
 }
 
+// Order History State
+enum HistoryFilter { today, week, month, all, custom }
+
+class OrderHistoryState {
+  final bool isLoading;
+  final List<DeliveryOrder> completedOrders;
+  final List<DeliveryOrder> failedOrders;
+  final HistoryFilter filter;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String? error;
+
+  OrderHistoryState({
+    this.isLoading = false,
+    this.completedOrders = const [],
+    this.failedOrders = const [],
+    this.filter = HistoryFilter.today,
+    this.startDate,
+    this.endDate,
+    this.error,
+  });
+
+  OrderHistoryState copyWith({
+    bool? isLoading,
+    List<DeliveryOrder>? completedOrders,
+    List<DeliveryOrder>? failedOrders,
+    HistoryFilter? filter,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? error,
+  }) {
+    return OrderHistoryState(
+      isLoading: isLoading ?? this.isLoading,
+      completedOrders: completedOrders ?? this.completedOrders,
+      failedOrders: failedOrders ?? this.failedOrders,
+      filter: filter ?? this.filter,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      error: error,
+    );
+  }
+}
+
+class OrderHistoryNotifier extends StateNotifier<OrderHistoryState> {
+  final dynamic _deliveryService;
+
+  OrderHistoryNotifier(this._deliveryService) : super(OrderHistoryState());
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> loadHistory({HistoryFilter? filter, DateTime? startDate, DateTime? endDate}) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    final newFilter = filter ?? state.filter;
+    DateTime? start = startDate;
+    DateTime? end = endDate;
+    bool? all;
+
+    // Calculate date range based on filter
+    final now = DateTime.now();
+    switch (newFilter) {
+      case HistoryFilter.today:
+        start = now;
+        end = now;
+        break;
+      case HistoryFilter.week:
+        start = now.subtract(const Duration(days: 7));
+        end = now;
+        break;
+      case HistoryFilter.month:
+        start = DateTime(now.year, now.month - 1, now.day);
+        end = now;
+        break;
+      case HistoryFilter.all:
+        all = true;
+        break;
+      case HistoryFilter.custom:
+        // Use provided dates
+        break;
+    }
+
+    try {
+      // Load completed and failed orders
+      final completed = await _deliveryService.getOrderHistory(
+        status: 'DELIVERED',
+        startDate: start != null ? _formatDate(start) : null,
+        endDate: end != null ? _formatDate(end) : null,
+        all: all,
+        limit: 50,
+      );
+
+      final failed = await _deliveryService.getOrderHistory(
+        status: 'FAILED',
+        startDate: start != null ? _formatDate(start) : null,
+        endDate: end != null ? _formatDate(end) : null,
+        all: all,
+        limit: 50,
+      );
+
+      state = state.copyWith(
+        isLoading: false,
+        completedOrders: completed,
+        failedOrders: failed,
+        filter: newFilter,
+        startDate: start,
+        endDate: end,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _extractErrorMessage(e, 'Failed to load order history'),
+      );
+    }
+  }
+
+  void setFilter(HistoryFilter filter) {
+    loadHistory(filter: filter);
+  }
+
+  void setCustomDateRange(DateTime start, DateTime end) {
+    loadHistory(filter: HistoryFilter.custom, startDate: start, endDate: end);
+  }
+}
+
 // Order Detail State
 class OrderDetailState {
   final bool isLoading;
@@ -178,7 +325,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to accept order');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to accept order'));
       return false;
     }
   }
@@ -190,7 +337,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to reject order');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to reject order'));
       return false;
     }
   }
@@ -203,7 +350,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to pickup order');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to pickup order'));
       return false;
     }
   }
@@ -216,7 +363,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to start transit');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to start delivery'));
       return false;
     }
   }
@@ -229,7 +376,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to mark as arrived');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to mark as arrived'));
       return false;
     }
   }
@@ -245,6 +392,18 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   }) async {
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
+      // Get current status to determine which steps to call
+      final currentStatus = state.order?.status ?? '';
+
+      // Automatically transition through intermediate states if needed
+      // Flow: PICKED_UP -> IN_TRANSIT -> ARRIVED -> DELIVERED
+      if (currentStatus == 'picked_up') {
+        await _deliveryService.startTransit(orderId, latitude: latitude, longitude: longitude);
+        await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
+      } else if (currentStatus == 'in_transit') {
+        await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
+      }
+      // Now complete the delivery
       await _deliveryService.completeDelivery(
         orderId,
         latitude: latitude,
@@ -259,7 +418,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to complete delivery');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to complete delivery'));
       return false;
     }
   }
@@ -272,6 +431,18 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   }) async {
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
+      // Get current status to determine which steps to call
+      final currentStatus = state.order?.status ?? '';
+
+      // Automatically transition through intermediate states if needed
+      // Flow: PICKED_UP -> IN_TRANSIT -> ARRIVED -> FAILED
+      if (currentStatus == 'picked_up') {
+        await _deliveryService.startTransit(orderId, latitude: latitude, longitude: longitude);
+        await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
+      } else if (currentStatus == 'in_transit') {
+        await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
+      }
+      // Now mark as failed
       await _deliveryService.failDelivery(
         orderId,
         failureReason: failureReason,
@@ -283,7 +454,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       state = state.copyWith(isActionLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isActionLoading: false, actionError: 'Failed to mark delivery as failed');
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to mark delivery as failed'));
       return false;
     }
   }

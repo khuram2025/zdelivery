@@ -8,7 +8,6 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
 import '../../../../core/widgets/custom_button.dart';
-import '../../../../core/widgets/loading_overlay.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../data/models.dart';
 import '../providers/orders_provider.dart';
@@ -61,53 +60,94 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: LoadingOverlay(
-        isLoading: state.isLoading,
-        message: 'Loading...',
-        child: order == null
-            ? const Center(child: CircularProgressIndicator())
-            : RefreshIndicator(
-                onRefresh: () async {
-                  await ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
-                },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Column(
-                    children: [
-                      // Status Header
-                      _StatusHeader(order: order),
-
-                      // Order Info Card
-                      _OrderInfoCard(order: order),
-
-                      // Customer & Locations
-                      _LocationsCard(
-                        order: order,
-                        onCallCustomer: () => _callCustomer(order.customer?.phone),
-                        onNavigate: () => _openNavigation(order.route?.navigationUrl),
-                      ),
-
-                      // Order Items
-                      if (order.order != null) _OrderItemsCard(orderInfo: order.order!),
-
-                      // COD Info
-                      if (order.isCod) _CodCard(order: order),
-
-                      // Timeline
-                      _TimelineCard(order: order),
-
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-      ),
-      bottomSheet: order != null
+      body: _buildBody(state, order),
+      bottomSheet: order != null && !_isCompletedOrFailed(order.status)
           ? _ActionBottomSheet(
               order: order,
               isLoading: state.isActionLoading,
             )
           : null,
+    );
+  }
+
+  bool _isCompletedOrFailed(String status) {
+    return ['delivered', 'DELIVERED', 'failed', 'FAILED', 'cancelled', 'CANCELLED'].contains(status);
+  }
+
+  Widget _buildBody(OrderDetailState state, DeliveryOrderDetail? order) {
+    // Show loading
+    if (state.isLoading && order == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show error
+    if (state.error != null && order == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+              const SizedBox(height: 16),
+              Text(
+                state.error!,
+                style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show content
+    if (order == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            // Status Header
+            _StatusHeader(order: order),
+
+            // Order Info Card
+            _OrderInfoCard(order: order),
+
+            // Customer & Locations
+            _LocationsCard(
+              order: order,
+              onCallCustomer: () => _callCustomer(order.customer?.phone),
+              onNavigate: () => _openNavigation(order.route?.navigationUrl),
+            ),
+
+            // Order Items
+            if (order.order != null) _OrderItemsCard(orderInfo: order.order!),
+
+            // COD Info
+            if (order.isCod) _CodCard(order: order),
+
+            // Timeline
+            _TimelineCard(order: order),
+
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -446,8 +486,17 @@ class _CodCard extends StatelessWidget {
 
   const _CodCard({required this.order});
 
+  // Get the correct COD amount (total order amount including delivery)
+  double get _amountToCollect {
+    if (order.codAmount > 0) {
+      return order.codAmount;
+    }
+    return order.order?.totalAmount ?? 0;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final amount = _amountToCollect;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -479,7 +528,7 @@ class _CodCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Collect ${order.codAmount.currency}',
+                    'Collect ${amount.currency}',
                     style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
@@ -489,7 +538,7 @@ class _CodCard extends StatelessWidget {
               ),
             ),
             Text(
-              order.codAmount.currency,
+              amount.currency,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -578,6 +627,11 @@ class _ActionBottomSheet extends ConsumerWidget {
     final actionInfo = _getActionInfo(order.status);
     if (actionInfo == null) return const SizedBox.shrink();
 
+    // Check if order is ready for completion (after pickup)
+    final isReadyForCompletion = order.status == DeliveryStatus.pickedUp ||
+        order.status == DeliveryStatus.inTransit ||
+        order.status == DeliveryStatus.arrived;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -594,7 +648,8 @@ class _ActionBottomSheet extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (order.status == DeliveryStatus.arrived) ...[
+            if (isReadyForCompletion) ...[
+              // Simplified flow: After pickup, show Complete/Fail options directly
               Row(
                 children: [
                   Expanded(
@@ -652,18 +707,9 @@ class _ActionBottomSheet extends ConsumerWidget {
           'icon': Icons.inventory_2_outlined,
           'color': AppColors.primary,
         };
+      // After pickup, go directly to Complete Delivery (simplified flow)
       case DeliveryStatus.pickedUp:
-        return {
-          'text': 'Start Delivery',
-          'icon': Icons.local_shipping_outlined,
-          'color': AppColors.primary,
-        };
       case DeliveryStatus.inTransit:
-        return {
-          'text': 'Mark as Arrived',
-          'icon': Icons.location_on_outlined,
-          'color': AppColors.secondary,
-        };
       case DeliveryStatus.arrived:
         return {
           'text': 'Complete Delivery',
@@ -694,13 +740,25 @@ class _ActionBottomSheet extends ConsumerWidget {
         break;
     }
 
-    if (success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Status updated successfully'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    if (context.mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Status updated successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      } else {
+        // Get error from state
+        final state = ref.read(orderDetailProvider(order.id));
+        final errorMessage = state.actionError ?? 'Action failed. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -739,11 +797,20 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
   File? _deliveryPhoto;
   bool _isLoading = false;
 
+  // Get the correct COD amount (total order amount including delivery)
+  double get _codAmountToCollect {
+    // Use codAmount if it's set, otherwise use order total
+    if (widget.order.codAmount > 0) {
+      return widget.order.codAmount;
+    }
+    return widget.order.order?.totalAmount ?? 0;
+  }
+
   @override
   void initState() {
     super.initState();
     if (widget.order.isCod) {
-      _codController.text = widget.order.codAmount.toStringAsFixed(0);
+      _codController.text = _codAmountToCollect.toStringAsFixed(0);
     }
   }
 
@@ -769,10 +836,11 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
     double? codCollected;
     if (widget.order.isCod) {
       codCollected = double.tryParse(_codController.text);
-      if (codCollected == null || codCollected != widget.order.codAmount) {
+      final expectedAmount = _codAmountToCollect;
+      if (codCollected == null || codCollected != expectedAmount) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Please collect exact amount: ${widget.order.codAmount.currency}'),
+            content: Text('Please collect exact amount: ${expectedAmount.currency}'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -881,11 +949,11 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
                 TextField(
                   controller: _codController,
                   keyboardType: TextInputType.number,
+                  readOnly: true, // Auto-filled, no need to edit
                   decoration: InputDecoration(
-                    labelText: 'COD Amount Collected',
-                    hintText: 'Enter amount',
+                    labelText: 'COD Amount to Collect',
                     prefixText: 'Rs ',
-                    suffixText: 'Expected: ${widget.order.codAmount.currency}',
+                    suffixIcon: const Icon(Icons.lock_outline, size: 18),
                   ),
                 ),
                 const SizedBox(height: 16),

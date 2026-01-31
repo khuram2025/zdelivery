@@ -83,6 +83,31 @@ class DeliveryService {
     return data.map((e) => DeliveryOrder.fromJson(e)).toList();
   }
 
+  Future<List<DeliveryOrder>> getOrderHistory({
+    String? status,
+    String? startDate,
+    String? endDate,
+    String? startTime,
+    String? endTime,
+    bool? all,
+    int? limit,
+  }) async {
+    final response = await _apiService.get(
+      ApiConstants.orderHistory,
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (startDate != null) 'start_date': startDate,
+        if (endDate != null) 'end_date': endDate,
+        if (startTime != null) 'start_time': startTime,
+        if (endTime != null) 'end_time': endTime,
+        if (all != null) 'all': all.toString(),
+        if (limit != null) 'limit': limit.toString(),
+      },
+    );
+    final List<dynamic> data = response.data['data']?['orders'] ?? response.data['data'] ?? [];
+    return data.map((e) => DeliveryOrder.fromJson(e)).toList();
+  }
+
   Future<DeliveryOrderDetail> getOrderDetail(int id) async {
     final response = await _apiService.get(ApiConstants.orderDetail(id));
     return DeliveryOrderDetail.fromJson(response.data['data']);
