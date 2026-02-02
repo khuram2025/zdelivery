@@ -25,20 +25,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void _showLogoutDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
+              // Close dialog first
+              Navigator.pop(dialogContext);
+              // Perform logout
               await ref.read(authStateProvider.notifier).logout();
+              // Navigate to login after a short delay to avoid navigator lock
               if (mounted) {
-                Navigator.pop(context);
-                context.go('/login');
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  context.go('/login');
+                });
               }
             },
             child: const Text('Logout', style: TextStyle(color: AppColors.error)),

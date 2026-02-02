@@ -74,7 +74,18 @@ class DeliveryService {
         if (date != null) 'date': date,
       },
     );
-    return response.data['data'];
+    final responseData = response.data;
+    // Handle different API response structures
+    if (responseData is Map<String, dynamic>) {
+      if (responseData['data'] is Map<String, dynamic>) {
+        return responseData['data'];
+      } else if (responseData['data'] is List) {
+        // If data is directly a list of orders
+        return {'orders': responseData['data']};
+      }
+      return responseData;
+    }
+    return {'orders': []};
   }
 
   Future<List<DeliveryOrder>> getPendingOrders() async {
@@ -234,6 +245,25 @@ class DeliveryService {
       data: {
         'amount_collected': amountCollected.toString(),
         if (paymentMethod != null) 'payment_method': paymentMethod,
+        if (notes != null) 'notes': notes,
+      },
+    );
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateCustomerLocation(
+    int id, {
+    required double latitude,
+    required double longitude,
+    String? address,
+    String? notes,
+  }) async {
+    final response = await _apiService.post(
+      ApiConstants.updateCustomerLocation(id),
+      data: {
+        'latitude': latitude,
+        'longitude': longitude,
+        if (address != null) 'address': address,
         if (notes != null) 'notes': notes,
       },
     );

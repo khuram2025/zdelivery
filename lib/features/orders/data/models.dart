@@ -229,6 +229,11 @@ class DeliveryOrder {
   final String? zoneName;
   final String? deliveryAddress;
   final String? deliveryCity;
+  final String? deliveryArea;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
   final double codAmount;
   final DateTime? scheduledDeliveryTime;
   final DateTime createdAt;
@@ -251,47 +256,113 @@ class DeliveryOrder {
     this.zoneName,
     this.deliveryAddress,
     this.deliveryCity,
+    this.deliveryArea,
+    this.deliveryLatitude,
+    this.deliveryLongitude,
+    this.pickupLatitude,
+    this.pickupLongitude,
     required this.codAmount,
     this.scheduledDeliveryTime,
     required this.createdAt,
     this.deliveredAt,
   });
 
+  bool get hasDeliveryCoordinates =>
+      deliveryLatitude != null &&
+      deliveryLongitude != null &&
+      deliveryLatitude != 0.0 &&
+      deliveryLongitude != 0.0 &&
+      deliveryLatitude!.abs() <= 90 &&
+      deliveryLongitude!.abs() <= 180;
+
+  bool get hasPickupCoordinates =>
+      pickupLatitude != null &&
+      pickupLongitude != null &&
+      pickupLatitude != 0.0 &&
+      pickupLongitude != 0.0 &&
+      pickupLatitude!.abs() <= 90 &&
+      pickupLongitude!.abs() <= 180;
+
   factory DeliveryOrder.fromJson(Map<String, dynamic> json) {
+    // Handle nested payment_breakdown structure (new API format)
+    final paymentBreakdown = json['payment_breakdown'] as Map<String, dynamic>?;
+
     // Try multiple fields for order total
     final orderTotal = double.tryParse(json['order_total']?.toString() ?? '') ??
+        double.tryParse(paymentBreakdown?['total']?.toString() ?? '') ??
         double.tryParse(json['total']?.toString() ?? '');
 
     final subtotal = double.tryParse(json['subtotal']?.toString() ?? '') ??
+        double.tryParse(paymentBreakdown?['subtotal']?.toString() ?? '') ??
         double.tryParse(json['order_amount']?.toString() ?? '');
 
     final deliveryFee = double.tryParse(json['delivery_fee']?.toString() ?? '') ??
+        double.tryParse(paymentBreakdown?['delivery_fee']?.toString() ?? '') ??
         double.tryParse(json['delivery_charges']?.toString() ?? '');
+
+    // Handle nested customer_info structure
+    final customerInfo = json['customer_info'] as Map<String, dynamic>?;
+    final customerName = json['customer_name'] ?? customerInfo?['name'];
+    final customerMobile = json['customer_mobile'] ?? customerInfo?['mobile'] ?? customerInfo?['phone'];
+
+    // Handle nested delivery_info structure
+    final deliveryInfo = json['delivery_info'] as Map<String, dynamic>?;
+    final deliveryAddress = json['delivery_address'] ?? deliveryInfo?['address'];
+    final deliveryCity = json['delivery_city'] ?? deliveryInfo?['city'];
+    final deliveryArea = json['delivery_area'] ?? deliveryInfo?['area'];
+    final zoneName = json['zone_name'] ?? deliveryInfo?['zone'];
+
+    // GPS coordinates for delivery location
+    final deliveryLatitude = double.tryParse(json['delivery_latitude']?.toString() ?? '') ??
+        double.tryParse(deliveryInfo?['latitude']?.toString() ?? '');
+    final deliveryLongitude = double.tryParse(json['delivery_longitude']?.toString() ?? '') ??
+        double.tryParse(deliveryInfo?['longitude']?.toString() ?? '');
+
+    // GPS coordinates for pickup location (store)
+    final pickupLatitude = double.tryParse(json['pickup_latitude']?.toString() ?? '');
+    final pickupLongitude = double.tryParse(json['pickup_longitude']?.toString() ?? '');
+
+    // Handle timestamps structure
+    final timestamps = json['timestamps'] as Map<String, dynamic>?;
+    final createdAtStr = json['created_at'] ?? timestamps?['created_at'];
+    final deliveredAtStr = json['delivered_at'] ?? timestamps?['delivered_at'];
+
+    // COD amount from payment_breakdown
+    final codAmount = double.tryParse(json['cod_amount']?.toString() ?? '') ??
+        (paymentBreakdown?['is_cod'] == true ? (double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ?? 0) : 0);
+
+    // Payment method from payment_breakdown
+    final paymentMethod = json['payment_method'] ?? paymentBreakdown?['payment_method'];
 
     return DeliveryOrder(
       id: json['id'],
-      assignmentNumber: json['assignment_number'] ?? '',
+      assignmentNumber: json['assignment_number'] ?? json['order_number'] ?? '',
       orderNumber: json['order_number'],
       orderTotal: orderTotal,
       subtotal: subtotal,
       deliveryFee: deliveryFee,
-      paymentMethod: json['payment_method'],
+      paymentMethod: paymentMethod,
       status: json['status'] ?? '',
       statusDisplay: json['status_display'],
       priority: json['priority'] ?? 1,
-      customerName: json['customer_name'],
-      customerMobile: json['customer_mobile'],
+      customerName: customerName,
+      customerMobile: customerMobile,
       agentName: json['agent_name'],
-      zoneName: json['zone_name'],
-      deliveryAddress: json['delivery_address'],
-      deliveryCity: json['delivery_city'],
-      codAmount: double.tryParse(json['cod_amount']?.toString() ?? '0') ?? 0,
+      zoneName: zoneName,
+      deliveryAddress: deliveryAddress,
+      deliveryCity: deliveryCity,
+      deliveryArea: deliveryArea,
+      deliveryLatitude: deliveryLatitude,
+      deliveryLongitude: deliveryLongitude,
+      pickupLatitude: pickupLatitude,
+      pickupLongitude: pickupLongitude,
+      codAmount: codAmount,
       scheduledDeliveryTime: json['scheduled_delivery_time'] != null
           ? DateTime.tryParse(json['scheduled_delivery_time'])
           : null,
-      createdAt: DateTime.parse(json['created_at']),
-      deliveredAt: json['delivered_at'] != null
-          ? DateTime.tryParse(json['delivered_at'])
+      createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now(),
+      deliveredAt: deliveredAtStr != null
+          ? DateTime.tryParse(deliveredAtStr)
           : null,
     );
   }
@@ -410,6 +481,8 @@ class DeliveryOrderDetail {
         address: businessInfo['address'] ?? '',
         phone: businessInfo['phone'],
         city: businessInfo['city'],
+        latitude: double.tryParse(businessInfo['latitude']?.toString() ?? ''),
+        longitude: double.tryParse(businessInfo['longitude']?.toString() ?? ''),
       );
     } else if (json['pickup_location'] != null) {
       pickupLocation = Location.fromJson(json['pickup_location']);
@@ -423,6 +496,8 @@ class DeliveryOrderDetail {
         name: deliveryInfo['zone'] ?? '',
         address: deliveryInfo['address'] ?? '',
         city: deliveryInfo['city'],
+        latitude: double.tryParse(deliveryInfo['latitude']?.toString() ?? ''),
+        longitude: double.tryParse(deliveryInfo['longitude']?.toString() ?? ''),
       );
     } else if (json['delivery_location'] != null) {
       deliveryLocation = Location.fromJson(json['delivery_location']);

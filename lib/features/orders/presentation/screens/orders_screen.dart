@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/loading_overlay.dart';
 import '../../../../core/widgets/order_card.dart';
 import '../providers/orders_provider.dart';
+import '../widgets/orders_map_view.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
@@ -16,6 +17,7 @@ class OrdersScreen extends ConsumerStatefulWidget {
 
 class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isMapView = false;
 
   @override
   void initState() {
@@ -34,6 +36,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
     if (_tabController.index == 0) {
       ref.read(ordersProvider.notifier).loadOrders();
     }
+    // Reset to list view when leaving Active tab
+    if (_tabController.index != 0 && _isMapView) {
+      setState(() => _isMapView = false);
+    }
+  }
+
+  void _toggleMapView() {
+    setState(() => _isMapView = !_isMapView);
   }
 
   @override
@@ -61,6 +71,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
           ],
         ),
         actions: [
+          // Map/List toggle - only show on Active tab
+          if (_tabController.index == 0)
+            IconButton(
+              icon: Icon(_isMapView ? Icons.list : Icons.map_outlined),
+              onPressed: _toggleMapView,
+              tooltip: _isMapView ? 'List View' : 'Map View',
+            ),
           IconButton(
             icon: const Icon(Icons.pending_actions_outlined),
             onPressed: () => context.push('/orders/pending'),
@@ -70,8 +87,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
       ),
       body: TabBarView(
         controller: _tabController,
+        physics: _isMapView ? const NeverScrollableScrollPhysics() : null,
         children: [
-          const _ActiveOrdersTab(),
+          _ActiveOrdersTab(
+            isMapView: _isMapView,
+            onOrderTapped: (order) => context.push('/orders/${order.id}'),
+          ),
           const _HistoryTab(isCompleted: true),
           const _HistoryTab(isCompleted: false),
         ],
@@ -82,7 +103,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
 
 // Active Orders Tab
 class _ActiveOrdersTab extends ConsumerWidget {
-  const _ActiveOrdersTab();
+  final bool isMapView;
+  final Function(dynamic order) onOrderTapped;
+
+  const _ActiveOrdersTab({
+    this.isMapView = false,
+    required this.onOrderTapped,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,6 +134,15 @@ class _ActiveOrdersTab extends ConsumerWidget {
       );
     }
 
+    // Map View
+    if (isMapView) {
+      return OrdersMapView(
+        orders: activeOrders,
+        onOrderTapped: onOrderTapped,
+      );
+    }
+
+    // List View
     return RefreshIndicator(
       onRefresh: () => ref.read(ordersProvider.notifier).loadOrders(),
       child: ListView.builder(

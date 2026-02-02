@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -38,18 +39,76 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
-  void _openNavigation(String? url) async {
-    if (url == null || url.isEmpty) return;
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  void _openNavigation({String? url, double? latitude, double? longitude, String? address}) async {
+    // Build the destination string
+    String? destination;
+    if (latitude != null && longitude != null) {
+      destination = '$latitude,$longitude';
+    } else if (address != null && address.isNotEmpty) {
+      destination = address;
     }
+
+    if (url == null && destination == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No navigation address available')),
+      );
+      return;
+    }
+
+    // Try multiple URL schemes in order of preference
+    final urlsToTry = <Uri>[];
+
+    if (url != null && url.isNotEmpty) {
+      urlsToTry.add(Uri.parse(url));
+    }
+
+    if (destination != null) {
+      final encodedDest = Uri.encodeComponent(destination);
+      // Google Maps URL (works on most devices)
+      urlsToTry.add(Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedDest'));
+      // Geo URI scheme (Android native)
+      urlsToTry.add(Uri.parse('geo:0,0?q=$encodedDest'));
+      // Google Maps with directions
+      urlsToTry.add(Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$encodedDest&travelmode=driving'));
+    }
+
+    for (final uri in urlsToTry) {
+      try {
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (launched) {
+          return; // Successfully launched
+        }
+      } catch (e) {
+        // Try next URL
+        continue;
+      }
+    }
+
+    // If all attempts failed
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open maps. Please install Google Maps.')),
+      );
+    }
+  }
+
+  void _showUpdateLocationDialog(DeliveryOrderDetail order) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _UpdateLocationSheet(
+        orderId: order.id,
+        currentAddress: order.deliveryLocation?.fullAddress,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(orderDetailProvider(widget.orderId));
     final order = state.order;
+    final showActionButton = order != null && !_isCompletedOrFailed(order.status);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -60,13 +119,21 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: _buildBody(state, order),
-      bottomSheet: order != null && !_isCompletedOrFailed(order.status)
-          ? _ActionBottomSheet(
-              order: order,
-              isLoading: state.isActionLoading,
-            )
-          : null,
+      body: Stack(
+        children: [
+          _buildBody(state, order),
+          if (showActionButton)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _ActionBottomSheet(
+                order: order!,
+                isLoading: state.isActionLoading,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -132,7 +199,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             _LocationsCard(
               order: order,
               onCallCustomer: () => _callCustomer(order.customer?.phone),
-              onNavigate: () => _openNavigation(order.route?.navigationUrl),
+              onNavigate: () => _openNavigation(
+                url: order.route?.navigationUrl,
+                latitude: order.deliveryLocation?.latitude,
+                longitude: order.deliveryLocation?.longitude,
+                address: order.deliveryLocation?.fullAddress,
+              ),
+              onUpdateLocation: () => _showUpdateLocationDialog(order),
             ),
 
             // Order Items
@@ -269,11 +342,13 @@ class _LocationsCard extends StatelessWidget {
   final DeliveryOrderDetail order;
   final VoidCallback onCallCustomer;
   final VoidCallback onNavigate;
+  final VoidCallback onUpdateLocation;
 
   const _LocationsCard({
     required this.order,
     required this.onCallCustomer,
     required this.onNavigate,
+    required this.onUpdateLocation,
   });
 
   @override
@@ -417,6 +492,20 @@ class _LocationsCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            // Update Location Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onUpdateLocation,
+                icon: const Icon(Icons.my_location, size: 18),
+                label: const Text('Update Customer Location'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
             ),
           ],
         ),
@@ -630,25 +719,26 @@ class _ActionBottomSheet extends ConsumerWidget {
     // Check if order is ready for completion (after pickup)
     final isReadyForCompletion = order.status == DeliveryStatus.pickedUp ||
         order.status == DeliveryStatus.inTransit ||
+        order.status == DeliveryStatus.outForDelivery ||
         order.status == DeliveryStatus.arrived;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.border, width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
         ],
       ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isReadyForCompletion) ...[
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isReadyForCompletion) ...[
               // Simplified flow: After pickup, show Complete/Fail options directly
               Row(
                 children: [
@@ -689,7 +779,6 @@ class _ActionBottomSheet extends ConsumerWidget {
               ),
           ],
         ),
-      ),
     );
   }
 
@@ -710,6 +799,7 @@ class _ActionBottomSheet extends ConsumerWidget {
       // After pickup, go directly to Complete Delivery (simplified flow)
       case DeliveryStatus.pickedUp:
       case DeliveryStatus.inTransit:
+      case DeliveryStatus.outForDelivery:
       case DeliveryStatus.arrived:
         return {
           'text': 'Complete Delivery',
@@ -865,6 +955,14 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
         const SnackBar(
           content: Text('Delivery completed successfully!'),
           backgroundColor: AppColors.success,
+        ),
+      );
+    } else if (!success && mounted) {
+      final state = ref.read(orderDetailProvider(widget.order.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(state.actionError ?? 'Failed to complete delivery'),
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -1105,6 +1203,310 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
                       onPressed: _selectedReason != null ? _failDelivery : null,
                       isLoading: _isLoading,
                       backgroundColor: AppColors.error,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpdateLocationSheet extends ConsumerStatefulWidget {
+  final int orderId;
+  final String? currentAddress;
+
+  const _UpdateLocationSheet({
+    required this.orderId,
+    this.currentAddress,
+  });
+
+  @override
+  ConsumerState<_UpdateLocationSheet> createState() => _UpdateLocationSheetState();
+}
+
+class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
+  final _addressController = TextEditingController();
+  final _notesController = TextEditingController();
+  Position? _currentPosition;
+  bool _isLoadingLocation = false;
+  bool _isUpdating = false;
+  String? _locationError;
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+      _locationError = null;
+    });
+
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _locationError = 'Location services are disabled. Please enable GPS.';
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      // Check permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _locationError = 'Location permission denied';
+            _isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _locationError = 'Location permissions are permanently denied. Please enable in settings.';
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      setState(() {
+        _currentPosition = position;
+        _isLoadingLocation = false;
+      });
+    } catch (e) {
+      setState(() {
+        _locationError = 'Failed to get location: ${e.toString()}';
+        _isLoadingLocation = false;
+      });
+    }
+  }
+
+  Future<void> _updateLocation() async {
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please get your current location first')),
+      );
+      return;
+    }
+
+    setState(() => _isUpdating = true);
+
+    final notifier = ref.read(orderDetailProvider(widget.orderId).notifier);
+    final success = await notifier.updateCustomerLocation(
+      latitude: _currentPosition!.latitude,
+      longitude: _currentPosition!.longitude,
+      address: _addressController.text.isNotEmpty ? _addressController.text : null,
+      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+    );
+
+    setState(() => _isUpdating = false);
+
+    if (mounted) {
+      Navigator.pop(context); // Always close the sheet
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success
+            ? 'Customer location updated successfully!'
+            : (ref.read(orderDetailProvider(widget.orderId)).actionError ?? 'Failed to update location')),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Update Customer Location',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use your current GPS location to update the delivery address',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              if (widget.currentAddress != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Current Address',
+                              style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                            ),
+                            Text(
+                              widget.currentAddress!,
+                              style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              // Get Location Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoadingLocation ? null : _getCurrentLocation,
+                  icon: _isLoadingLocation
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location),
+                  label: Text(_isLoadingLocation ? 'Getting Location...' : 'Get Current Location'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    foregroundColor: AppColors.primary,
+                  ),
+                ),
+              ),
+              if (_locationError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _locationError!,
+                  style: const TextStyle(color: AppColors.error, fontSize: 13),
+                ),
+              ],
+              if (_currentPosition != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Location Captured',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.success,
+                              ),
+                            ),
+                            Text(
+                              'Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}, Lng: ${_currentPosition!.longitude.toStringAsFixed(6)}',
+                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Address Description (Optional)',
+                    hintText: 'e.g., Near City Park, Gate 2',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (Optional)',
+                    hintText: 'Any additional notes...',
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: CustomButton(
+                      text: 'Update Location',
+                      onPressed: _currentPosition != null ? _updateLocation : null,
+                      isLoading: _isUpdating,
+                      icon: Icons.save,
+                      backgroundColor: AppColors.primary,
                     ),
                   ),
                 ],

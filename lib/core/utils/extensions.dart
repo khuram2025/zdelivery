@@ -50,6 +50,7 @@ extension DeliveryStatusExtension on String {
       case DeliveryStatus.pickedUp:
         return AppColors.info;
       case DeliveryStatus.inTransit:
+      case DeliveryStatus.outForDelivery:
         return AppColors.primaryLight;
       case DeliveryStatus.arrived:
         return AppColors.secondary;
@@ -79,6 +80,8 @@ extension DeliveryStatusExtension on String {
         return 'Picked Up';
       case DeliveryStatus.inTransit:
         return 'In Transit';
+      case DeliveryStatus.outForDelivery:
+        return 'Out for Delivery';
       case DeliveryStatus.arrived:
         return 'Arrived';
       case DeliveryStatus.delivered:
@@ -104,6 +107,7 @@ extension DeliveryStatusExtension on String {
       case DeliveryStatus.pickedUp:
         return Icons.inventory_2_outlined;
       case DeliveryStatus.inTransit:
+      case DeliveryStatus.outForDelivery:
         return Icons.local_shipping_outlined;
       case DeliveryStatus.arrived:
         return Icons.location_on_outlined;

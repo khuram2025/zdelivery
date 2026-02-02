@@ -78,13 +78,21 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final data = await _deliveryService.getOrders(status: status, date: date);
-      final List<dynamic> ordersJson = data['active_orders'] ?? [];
+      // Handle different API response structures
+      List<dynamic> ordersJson = [];
+      if (data['active_orders'] != null) {
+        ordersJson = data['active_orders'] as List<dynamic>;
+      } else if (data['orders'] != null) {
+        ordersJson = data['orders'] as List<dynamic>;
+      } else if (data is List) {
+        ordersJson = data;
+      }
       final orders = ordersJson.map((e) => DeliveryOrder.fromJson(e)).toList();
       state = state.copyWith(
         isLoading: false,
         activeOrders: orders,
-        completedToday: data['completed_today'] ?? 0,
-        pendingCount: data['pending_count'] ?? 0,
+        completedToday: data['completed_today'] ?? data['stats']?['completed_today'] ?? 0,
+        pendingCount: data['pending_count'] ?? data['stats']?['pending_count'] ?? 0,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Failed to load orders');
@@ -393,14 +401,14 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       // Get current status to determine which steps to call
-      final currentStatus = state.order?.status ?? '';
+      final currentStatus = state.order?.status?.toUpperCase() ?? '';
 
       // Automatically transition through intermediate states if needed
-      // Flow: PICKED_UP -> IN_TRANSIT -> ARRIVED -> DELIVERED
-      if (currentStatus == 'picked_up') {
+      // Flow: PICKED_UP -> IN_TRANSIT/OUT_FOR_DELIVERY -> ARRIVED -> DELIVERED
+      if (currentStatus == 'PICKED_UP') {
         await _deliveryService.startTransit(orderId, latitude: latitude, longitude: longitude);
         await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
-      } else if (currentStatus == 'in_transit') {
+      } else if (currentStatus == 'IN_TRANSIT' || currentStatus == 'OUT_FOR_DELIVERY') {
         await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
       }
       // Now complete the delivery
@@ -432,14 +440,14 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       // Get current status to determine which steps to call
-      final currentStatus = state.order?.status ?? '';
+      final currentStatus = state.order?.status?.toUpperCase() ?? '';
 
       // Automatically transition through intermediate states if needed
-      // Flow: PICKED_UP -> IN_TRANSIT -> ARRIVED -> FAILED
-      if (currentStatus == 'picked_up') {
+      // Flow: PICKED_UP -> IN_TRANSIT/OUT_FOR_DELIVERY -> ARRIVED -> FAILED
+      if (currentStatus == 'PICKED_UP') {
         await _deliveryService.startTransit(orderId, latitude: latitude, longitude: longitude);
         await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
-      } else if (currentStatus == 'in_transit') {
+      } else if (currentStatus == 'IN_TRANSIT' || currentStatus == 'OUT_FOR_DELIVERY') {
         await _deliveryService.markArrived(orderId, latitude: latitude, longitude: longitude);
       }
       // Now mark as failed
@@ -455,6 +463,30 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       return true;
     } catch (e) {
       state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to mark delivery as failed'));
+      return false;
+    }
+  }
+
+  Future<bool> updateCustomerLocation({
+    required double latitude,
+    required double longitude,
+    String? address,
+    String? notes,
+  }) async {
+    state = state.copyWith(isActionLoading: true, actionError: null);
+    try {
+      await _deliveryService.updateCustomerLocation(
+        orderId,
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+        notes: notes,
+      );
+      await loadOrderDetail();
+      state = state.copyWith(isActionLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isActionLoading: false, actionError: _extractErrorMessage(e, 'Failed to update customer location'));
       return false;
     }
   }

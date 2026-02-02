@@ -105,7 +105,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     } catch (e) {
-      print('Login exception: $e'); // Debug log
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),

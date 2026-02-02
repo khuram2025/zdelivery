@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
 import '../../../../core/widgets/loading_overlay.dart';
 import '../../../../core/widgets/order_card.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../orders/presentation/providers/orders_provider.dart';
 import '../../../profile/presentation/providers/profile_provider.dart';
 
@@ -29,6 +30,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _refresh() async {
     await ref.read(profileProvider.notifier).loadProfile();
     await ref.read(ordersProvider.notifier).loadOrders();
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              // Close dialog first
+              Navigator.pop(dialogContext);
+              // Perform logout
+              await ref.read(authStateProvider.notifier).logout();
+              // Navigate to login after a short delay to avoid navigator lock
+              if (mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  context.go('/login');
+                });
+              }
+            },
+            child: const Text('Logout', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -65,30 +97,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         children: [
                           Row(
                             children: [
-                              // Profile Photo
-                              Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
-                                    width: 2,
+                              // Profile Photo with Popup Menu
+                              PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'logout') {
+                                    _showLogoutDialog();
+                                  } else if (value == 'profile') {
+                                    context.go('/profile');
+                                  }
+                                },
+                                offset: const Offset(0, 56),
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem(
+                                    value: 'profile',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.person_outline),
+                                        SizedBox(width: 8),
+                                        Text('Profile'),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                child: profile?.profilePhoto != null
-                                    ? ClipOval(
-                                        child: Image.network(
-                                          profile!.profilePhoto!,
-                                          fit: BoxFit.cover,
+                                  const PopupMenuItem(
+                                    value: 'logout',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.logout, color: AppColors.error),
+                                        SizedBox(width: 8),
+                                        Text('Logout', style: TextStyle(color: AppColors.error)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.3),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: profile?.profilePhoto != null
+                                      ? ClipOval(
+                                          child: Image.network(
+                                            profile!.profilePhoto!,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.person,
+                                          color: Colors.white,
+                                          size: 32,
                                         ),
-                                      )
-                                    : const Icon(
-                                        Icons.person,
-                                        color: Colors.white,
-                                        size: 32,
-                                      ),
+                                ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(

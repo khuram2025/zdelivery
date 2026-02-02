@@ -19,6 +19,7 @@ class DeliveryStatus {
   static const String rejected = 'REJECTED';
   static const String pickedUp = 'PICKED_UP';
   static const String inTransit = 'IN_TRANSIT';
+  static const String outForDelivery = 'OUT_FOR_DELIVERY';
   static const String arrived = 'ARRIVED';
   static const String delivered = 'DELIVERED';
   static const String failed = 'FAILED';

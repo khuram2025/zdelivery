@@ -55,28 +55,21 @@ class AuthService {
 
   // Login
   Future<AuthResponse> login(String mobileNumber, String password) async {
-    try {
-      final response = await _apiService.post(
-        ApiConstants.login,
-        data: {
-          'mobile_number': mobileNumber,
-          'password': password,
-        },
-      );
+    final response = await _apiService.post(
+      ApiConstants.login,
+      data: {
+        'mobile_number': mobileNumber,
+        'password': password,
+      },
+    );
 
-      print('Login response: ${response.data}'); // Debug log
+    final authResponse = AuthResponse.fromJson(response.data);
 
-      final authResponse = AuthResponse.fromJson(response.data);
-
-      if (authResponse.success && authResponse.tokens != null) {
-        await _saveAuthData(authResponse);
-      }
-
-      return authResponse;
-    } catch (e) {
-      print('Login error: $e'); // Debug log
-      rethrow;
+    if (authResponse.success && authResponse.tokens != null) {
+      await _saveAuthData(authResponse);
     }
+
+    return authResponse;
   }
 
   // Logout
