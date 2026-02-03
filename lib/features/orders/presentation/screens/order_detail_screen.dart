@@ -455,7 +455,7 @@ class _LocationsCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        order.deliveryLocation?.fullAddress ?? '-',
+                        order.deliveryLocation?.displayAddress ?? '-',
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -830,25 +830,16 @@ class _ActionBottomSheet extends ConsumerWidget {
         break;
     }
 
-    if (context.mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Status updated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      } else {
-        // Get error from state
-        final state = ref.read(orderDetailProvider(order.id));
-        final errorMessage = state.actionError ?? 'Action failed. Please try again.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+    if (context.mounted && !success) {
+      // Show error only on failure
+      final state = ref.read(orderDetailProvider(order.id));
+      final errorMessage = state.actionError ?? 'Action failed. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -949,22 +940,17 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
 
     setState(() => _isLoading = false);
 
-    if (success && mounted) {
+    if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Delivery completed successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } else if (!success && mounted) {
-      final state = ref.read(orderDetailProvider(widget.order.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(state.actionError ?? 'Failed to complete delivery'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      if (!success) {
+        final state = ref.read(orderDetailProvider(widget.order.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(state.actionError ?? 'Failed to complete delivery'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 

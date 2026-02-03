@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/services/session_manager.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../data/models.dart';
@@ -13,7 +15,16 @@ final authServiceProvider = Provider<AuthService>((ref) {
 });
 
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.read(authServiceProvider));
+  final notifier = AuthNotifier(ref.read(authServiceProvider));
+
+  // Listen to session expired events to reset auth state
+  final subscription = SessionManager().onSessionExpired.listen((_) {
+    notifier.forceLogout();
+  });
+
+  ref.onDispose(() => subscription.cancel());
+
+  return notifier;
 });
 
 class AuthState {
@@ -378,6 +389,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // Logout
   Future<void> logout() async {
     await _authService.logout();
+    state = AuthState();
+  }
+
+  // Force logout (called when session expires)
+  void forceLogout() {
     state = AuthState();
   }
 

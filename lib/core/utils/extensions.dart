@@ -38,6 +38,15 @@ extension DateTimeExtension on DateTime {
 extension DoubleExtension on double {
   String get currency => NumberFormat.currency(symbol: 'Rs ', decimalDigits: 0).format(this);
   String get currencyWithDecimals => NumberFormat.currency(symbol: 'Rs ', decimalDigits: 2).format(this);
+
+  String get compactCurrency {
+    if (this >= 1000000) {
+      return 'Rs ${(this / 1000000).toStringAsFixed(1)}M';
+    } else if (this >= 1000) {
+      return 'Rs ${(this / 1000).toStringAsFixed(1)}K';
+    }
+    return NumberFormat.currency(symbol: 'Rs ', decimalDigits: 0).format(this);
+  }
 }
 
 extension DeliveryStatusExtension on String {

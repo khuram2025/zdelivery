@@ -1,5 +1,6 @@
 import 'dart:io';
 import '../core/constants/api_constants.dart';
+import '../features/dashboard/data/models.dart';
 import '../features/orders/data/models.dart';
 import '../features/profile/data/models.dart';
 import '../features/earnings/data/models.dart';
@@ -286,5 +287,22 @@ class DeliveryService {
   Future<StatisticsData> getStatistics() async {
     final response = await _apiService.get(ApiConstants.agentStatistics);
     return StatisticsData.fromJson(response.data['data']);
+  }
+
+  // Dashboard
+  Future<DashboardData> getDashboard({
+    String? period,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final response = await _apiService.get(
+      ApiConstants.agentDashboard,
+      queryParameters: {
+        if (period != null) 'period': period,
+        if (startDate != null) 'start_date': startDate,
+        if (endDate != null) 'end_date': endDate,
+      },
+    );
+    return DashboardData.fromJson(response.data['data']);
   }
 }

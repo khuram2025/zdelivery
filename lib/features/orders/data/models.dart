@@ -92,6 +92,7 @@ class Location {
   final double? latitude;
   final double? longitude;
   final String? city;
+  final String? area;
   final String? state;
   final String? postalCode;
 
@@ -102,6 +103,7 @@ class Location {
     this.latitude,
     this.longitude,
     this.city,
+    this.area,
     this.state,
     this.postalCode,
   });
@@ -114,17 +116,27 @@ class Location {
       latitude: double.tryParse(json['latitude']?.toString() ?? ''),
       longitude: double.tryParse(json['longitude']?.toString() ?? ''),
       city: json['city'],
+      area: json['area'],
       state: json['state'],
       postalCode: json['postal_code'],
     );
   }
 
+  /// Full address with city, state, postalCode
   String get fullAddress {
     final parts = [address];
     if (city != null && city!.isNotEmpty) parts.add(city!);
     if (state != null && state!.isNotEmpty) parts.add(state!);
     if (postalCode != null && postalCode!.isNotEmpty) parts.add(postalCode!);
     return parts.join(', ');
+  }
+
+  /// Display address with street and area only (no city)
+  String get displayAddress {
+    final parts = <String>[];
+    if (address.isNotEmpty) parts.add(address);
+    if (area != null && area!.isNotEmpty) parts.add(area!);
+    return parts.isNotEmpty ? parts.join(', ') : 'No address';
   }
 }
 
@@ -496,6 +508,7 @@ class DeliveryOrderDetail {
         name: deliveryInfo['zone'] ?? '',
         address: deliveryInfo['address'] ?? '',
         city: deliveryInfo['city'],
+        area: deliveryInfo['area'],
         latitude: double.tryParse(deliveryInfo['latitude']?.toString() ?? ''),
         longitude: double.tryParse(deliveryInfo['longitude']?.toString() ?? ''),
       );

@@ -73,7 +73,7 @@ class OrderCard extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Address
+              // Area/Location
               Row(
                 children: [
                   const Icon(
@@ -84,7 +84,7 @@ class OrderCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      order.deliveryAddress ?? 'No address',
+                      order.deliveryArea ?? order.zoneName ?? order.deliveryCity ?? order.deliveryAddress ?? 'No location',
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,

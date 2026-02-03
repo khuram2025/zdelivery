@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
+import 'core/services/session_manager.dart';
 import 'core/theme/app_theme.dart';
 
 void main() async {
@@ -26,8 +28,32 @@ void main() async {
   runApp(const ProviderScope(child: ZDeliveryApp()));
 }
 
-class ZDeliveryApp extends StatelessWidget {
+class ZDeliveryApp extends StatefulWidget {
   const ZDeliveryApp({super.key});
+
+  @override
+  State<ZDeliveryApp> createState() => _ZDeliveryAppState();
+}
+
+class _ZDeliveryAppState extends State<ZDeliveryApp> {
+  late final StreamSubscription<String> _sessionSubscription;
+  final SessionManager _sessionManager = SessionManager();
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for session expired events
+    _sessionSubscription = _sessionManager.onSessionExpired.listen((message) {
+      // Navigate to login and clear the stack
+      appRouter.go('/login');
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionSubscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

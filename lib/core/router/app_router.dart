@@ -4,20 +4,20 @@ import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
+import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/earnings/presentation/screens/earnings_screen.dart';
 import '../../features/earnings/presentation/screens/statistics_screen.dart';
-import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/home/presentation/screens/main_shell.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_screen.dart';
 import '../../features/orders/presentation/screens/pending_orders_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../services/navigation_service.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
+  navigatorKey: NavigationService.navigatorKey,
   initialLocation: '/',
   routes: [
     // Splash
@@ -49,11 +49,11 @@ final appRouter = GoRouter(
       navigatorKey: _shellNavigatorKey,
       builder: (context, state, child) => MainShell(child: child),
       routes: [
-        // Home
+        // Dashboard (Home)
         GoRoute(
           path: '/home',
           pageBuilder: (context, state) => const NoTransitionPage(
-            child: HomeScreen(),
+            child: DashboardScreen(),
           ),
         ),
 
