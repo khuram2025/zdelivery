@@ -40,7 +40,7 @@ class OrderCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          order.orderNumber ?? order.assignmentNumber,
+                          order.customerMobile ?? 'No mobile',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
@@ -53,6 +53,14 @@ class OrderCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 13,
                             color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          order.orderNumber ?? order.assignmentNumber,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textTertiary,
                           ),
                         ),
                       ],
@@ -116,13 +124,13 @@ class OrderCard extends StatelessWidget {
                     ),
                   const Spacer(),
                   Icon(
-                    Icons.access_time_rounded,
+                    Icons.schedule_rounded,
                     size: 14,
                     color: AppColors.textTertiary,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    order.createdAt.timeAgo,
+                    order.scheduledDeliveryTime?.formattedDateTime ?? '-',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textTertiary,

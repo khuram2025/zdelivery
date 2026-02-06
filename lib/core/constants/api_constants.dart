@@ -1,8 +1,8 @@
 class ApiConstants {
   // Base URL - port 8001 as per auth.md documentation
-  static const String baseUrl = 'http://54.166.200.11:8001/api/v1';
+  // static const String baseUrl = 'http://54.166.200.11:8001/api/v1';
   // static const String baseUrl = 'http://54.209.158.254:8004/api/v1';
-  // static const String baseUrl = 'https://zayyrah.com/api/v1/';
+  static const String baseUrl = 'https://zayyrah.com/api/v1/';
 
   // Auth endpoints (as per auth.md)
   static const String login = '/delivery/auth/login/';

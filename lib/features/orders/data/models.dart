@@ -138,6 +138,15 @@ class Location {
     if (area != null && area!.isNotEmpty) parts.add(area!);
     return parts.isNotEmpty ? parts.join(', ') : 'No address';
   }
+
+  /// Whether this location has valid GPS coordinates
+  bool get hasCoordinates =>
+      latitude != null &&
+      longitude != null &&
+      latitude != 0.0 &&
+      longitude != 0.0 &&
+      latitude!.abs() <= 90 &&
+      longitude!.abs() <= 180;
 }
 
 class DeliveryTimestamps {
@@ -346,6 +355,29 @@ class DeliveryOrder {
     // Payment method from payment_breakdown
     final paymentMethod = json['payment_method'] ?? paymentBreakdown?['payment_method'];
 
+    // Parse scheduled delivery time from various formats
+    DateTime? scheduledDeliveryTime;
+    if (json['scheduled_date'] != null) {
+      // Format: scheduled_date + scheduled_time (from history API)
+      final dateStr = json['scheduled_date'] as String;
+      final timeStr = json['scheduled_time'] as String? ?? '00:00:00';
+      scheduledDeliveryTime = DateTime.tryParse('${dateStr}T$timeStr');
+    } else if (json['scheduled_delivery_time'] != null) {
+      final schedValue = json['scheduled_delivery_time'] as String;
+      // Try parsing as full ISO datetime first
+      scheduledDeliveryTime = DateTime.tryParse(schedValue);
+      // If failed, it might be time-only (e.g., "07:30:00") - combine with created_at date
+      if (scheduledDeliveryTime == null && schedValue.contains(':')) {
+        final createdAt = json['created_at'] != null
+            ? DateTime.tryParse(json['created_at'])
+            : DateTime.now();
+        if (createdAt != null) {
+          final datePart = '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}';
+          scheduledDeliveryTime = DateTime.tryParse('${datePart}T$schedValue');
+        }
+      }
+    }
+
     return DeliveryOrder(
       id: json['id'],
       assignmentNumber: json['assignment_number'] ?? json['order_number'] ?? '',
@@ -369,9 +401,7 @@ class DeliveryOrder {
       pickupLatitude: pickupLatitude,
       pickupLongitude: pickupLongitude,
       codAmount: codAmount,
-      scheduledDeliveryTime: json['scheduled_delivery_time'] != null
-          ? DateTime.tryParse(json['scheduled_delivery_time'])
-          : null,
+      scheduledDeliveryTime: scheduledDeliveryTime,
       createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now(),
       deliveredAt: deliveredAtStr != null
           ? DateTime.tryParse(deliveredAtStr)
@@ -578,4 +608,5 @@ class DeliveryOrderDetail {
 
   bool get isCod => order?.paymentMethod == 'COD';
   bool get canRetry => retryCount < maxRetries;
+  bool get hasDeliveryCoordinates => deliveryLocation?.hasCoordinates ?? false;
 }

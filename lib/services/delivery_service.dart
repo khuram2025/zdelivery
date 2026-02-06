@@ -117,7 +117,8 @@ class DeliveryService {
       },
     );
     final List<dynamic> data = response.data['data']?['orders'] ?? response.data['data'] ?? [];
-    return data.map((e) => DeliveryOrder.fromJson(e)).toList();
+    final List<DeliveryOrder> orders = data.map((e) => DeliveryOrder.fromJson(e)).toList();
+    return orders;
   }
 
   Future<DeliveryOrderDetail> getOrderDetail(int id) async {

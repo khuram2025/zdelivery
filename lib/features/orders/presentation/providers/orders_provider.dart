@@ -88,6 +88,15 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
         ordersJson = data;
       }
       final orders = ordersJson.map((e) => DeliveryOrder.fromJson(e)).toList();
+      // Sort by scheduled delivery time (earliest first)
+      orders.sort((a, b) {
+        final aTime = a.scheduledDeliveryTime;
+        final bTime = b.scheduledDeliveryTime;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1; // null times go to the end
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
       state = state.copyWith(
         isLoading: false,
         activeOrders: orders,
@@ -242,7 +251,6 @@ class OrderHistoryNotifier extends StateNotifier<OrderHistoryState> {
         all: all,
         limit: 50,
       );
-
       final failed = await _deliveryService.getOrderHistory(
         status: 'FAILED',
         startDate: start != null ? _formatDate(start) : null,
@@ -250,6 +258,23 @@ class OrderHistoryNotifier extends StateNotifier<OrderHistoryState> {
         all: all,
         limit: 50,
       );
+      // Sort by scheduled delivery time (earliest first)
+      completed.sort((DeliveryOrder a, DeliveryOrder b) {
+        final aTime = a.scheduledDeliveryTime;
+        final bTime = b.scheduledDeliveryTime;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
+      failed.sort((DeliveryOrder a, DeliveryOrder b) {
+        final aTime = a.scheduledDeliveryTime;
+        final bTime = b.scheduledDeliveryTime;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
+      });
 
       state = state.copyWith(
         isLoading: false,

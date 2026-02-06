@@ -39,7 +39,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
-    await ref.read(authStateProvider.notifier).checkAuthStatus();
+    try {
+      await ref.read(authStateProvider.notifier).checkAuthStatus();
+    } catch (e) {
+      // If auth check fails, proceed to login
+      debugPrint('Auth check failed: $e');
+    }
     if (mounted) {
       final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
       if (isAuthenticated) {

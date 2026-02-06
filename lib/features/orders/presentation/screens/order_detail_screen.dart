@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -454,59 +455,86 @@ class _LocationsCard extends StatelessWidget {
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      Text(
-                        order.deliveryLocation?.displayAddress ?? '-',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
+                      if (order.hasDeliveryCoordinates)
+                        Text(
+                          order.deliveryLocation?.displayAddress ?? '-',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        )
+                      else
+                        const Text(
+                          'No location',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.error,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onCallCustomer,
-                    icon: const Icon(Icons.phone_outlined, size: 18),
-                    label: const Text('Call'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+            if (order.hasDeliveryCoordinates) ...[
+              // Action Buttons - shown when location exists
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onCallCustomer,
+                      icon: const Icon(Icons.phone_outlined, size: 18),
+                      label: const Text('Call'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: onNavigate,
-                    icon: const Icon(Icons.navigation_outlined, size: 18),
-                    label: const Text('Navigate'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: onNavigate,
+                      icon: const Icon(Icons.navigation_outlined, size: 18),
+                      label: const Text('Navigate'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Update Location Button
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onUpdateLocation,
-                icon: const Icon(Icons.my_location, size: 18),
-                label: const Text('Update Customer Location'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Update Location Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onUpdateLocation,
+                  icon: const Icon(Icons.my_location, size: 18),
+                  label: const Text('Update Customer Location'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                 ),
               ),
-            ),
+            ] else ...[
+              // Add Location Button - shown when no GPS location
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onUpdateLocation,
+                  icon: const Icon(Icons.add_location_alt, size: 18),
+                  label: const Text('Add Location'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1223,6 +1251,15 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
   String? _locationError;
 
   @override
+  void initState() {
+    super.initState();
+    // Auto-fetch location immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _getCurrentLocation();
+    });
+  }
+
+  @override
   void dispose() {
     _addressController.dispose();
     _notesController.dispose();
@@ -1323,6 +1360,9 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1357,106 +1397,245 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 'Use your current GPS location to update the delivery address',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),
               ),
-              if (widget.currentAddress != null) ...[
-                const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              // Map Preview / Location Status
+              if (_isLoadingLocation)
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  height: 200,
+                  width: double.infinity,
                   decoration: BoxDecoration(
                     color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  child: Row(
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Current Address',
-                              style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
-                            ),
-                            Text(
-                              widget.currentAddress!,
-                              style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-                            ),
-                          ],
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text(
+                        'Getting your location...',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-              const SizedBox(height: 24),
-              // Get Location Button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoadingLocation ? null : _getCurrentLocation,
-                  icon: _isLoadingLocation
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location),
-                  label: Text(_isLoadingLocation ? 'Getting Location...' : 'Get Current Location'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    foregroundColor: AppColors.primary,
-                  ),
-                ),
-              ),
-              if (_locationError != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _locationError!,
-                  style: const TextStyle(color: AppColors.error, fontSize: 13),
-                ),
-              ],
-              if (_currentPosition != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: AppColors.success, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Location Captured',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.success,
+                )
+              else if (_currentPosition != null)
+                Column(
+                  children: [
+                    // Google Maps Preview with pin overlay
+                    Container(
+                      height: 220,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          GoogleMap(
+                            initialCameraPosition: CameraPosition(
+                              target: LatLng(
+                                _currentPosition!.latitude,
+                                _currentPosition!.longitude,
+                              ),
+                              zoom: 17,
+                            ),
+                            markers: {
+                              Marker(
+                                markerId: const MarkerId('current_location'),
+                                position: LatLng(
+                                  _currentPosition!.latitude,
+                                  _currentPosition!.longitude,
+                                ),
+                                infoWindow: const InfoWindow(title: 'Customer Location'),
+                              ),
+                            },
+                            myLocationEnabled: false,
+                            myLocationButtonEnabled: false,
+                            zoomControlsEnabled: false,
+                            mapToolbarEnabled: false,
+                            scrollGesturesEnabled: false,
+                            zoomGesturesEnabled: false,
+                            rotateGesturesEnabled: false,
+                            tiltGesturesEnabled: false,
+                          ),
+                          // Center pin overlay (always visible on top of map)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: 36),
+                              child: Icon(
+                                Icons.location_pin,
+                                color: Colors.red,
+                                size: 48,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black26,
+                                    blurRadius: 6,
+                                    offset: Offset(0, 3),
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              'Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}, Lng: ${_currentPosition!.longitude.toStringAsFixed(6)}',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                          // Shadow dot under pin
+                          Center(
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(top: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ],
+                          ),
+                          // Location badge overlay
+                          Positioned(
+                            top: 10,
+                            left: 10,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: AppColors.success,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.white, size: 14),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Location Found',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Refresh button overlay
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: GestureDetector(
+                              onTap: _getCurrentLocation,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.refresh, size: 18, color: AppColors.primary),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Coordinates display
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.gps_fixed, color: AppColors.primary, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_currentPosition!.latitude.toStringAsFixed(6)}, ${_currentPosition!.longitude.toStringAsFixed(6)}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              else
+                // Error or initial state
+                Container(
+                  height: 200,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _locationError != null ? Icons.location_off : Icons.location_searching,
+                        size: 40,
+                        color: _locationError != null ? AppColors.error : AppColors.textTertiary,
+                      ),
+                      const SizedBox(height: 12),
+                      if (_locationError != null) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            _locationError!,
+                            style: const TextStyle(color: AppColors.error, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      OutlinedButton.icon(
+                        onPressed: _getCurrentLocation,
+                        icon: const Icon(Icons.my_location, size: 18),
+                        label: const Text('Get Current Location'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
                         ),
                       ),
                     ],
                   ),
                 ),
+              if (_currentPosition != null) ...[
                 const SizedBox(height: 16),
                 TextField(
                   controller: _addressController,

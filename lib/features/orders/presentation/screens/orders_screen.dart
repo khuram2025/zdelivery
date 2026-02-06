@@ -35,6 +35,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
     // Refresh data when switching tabs
     if (_tabController.index == 0) {
       ref.read(ordersProvider.notifier).loadOrders();
+    } else {
+      // Refresh history for Completed (index 1) and Failed (index 2) tabs
+      ref.read(orderHistoryProvider.notifier).loadHistory();
     }
     // Reset to list view when leaving Active tab
     if (_tabController.index != 0 && _isMapView) {
