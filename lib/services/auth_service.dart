@@ -8,7 +8,11 @@ import 'api_service.dart';
 
 class AuthService {
   final ApiService _apiService;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+  );
 
   AuthService(this._apiService);
 

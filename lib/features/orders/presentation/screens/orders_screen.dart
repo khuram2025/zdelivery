@@ -15,7 +15,8 @@ class OrdersScreen extends ConsumerStatefulWidget {
   ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerProviderStateMixin {
+class _OrdersScreenState extends ConsumerState<OrdersScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   bool _isMapView = false;
 
@@ -24,10 +25,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(ordersProvider.notifier).loadOrders();
       ref.read(orderHistoryProvider.notifier).loadHistory();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshCurrentTab();
+    }
+  }
+
+  void _refreshCurrentTab() {
+    if (_tabController.index == 0) {
+      ref.read(ordersProvider.notifier).loadOrders();
+    } else {
+      ref.read(orderHistoryProvider.notifier).loadHistory();
+    }
   }
 
   void _onTabChanged() {
@@ -51,6 +68,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -94,7 +112,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
         children: [
           _ActiveOrdersTab(
             isMapView: _isMapView,
-            onOrderTapped: (order) => context.push('/orders/${order.id}'),
+            onOrderTapped: (order) async {
+              await context.push('/orders/${order.id}');
+              _refreshCurrentTab();
+            },
           ),
           const _HistoryTab(isCompleted: true),
           const _HistoryTab(isCompleted: false),
@@ -117,9 +138,18 @@ class _ActiveOrdersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersState = ref.watch(ordersProvider);
-    final activeOrders = ordersState.activeOrders.where((o) =>
-      !['DELIVERED', 'FAILED', 'CANCELLED', 'RETURNED', 'delivered', 'failed', 'cancelled', 'returned'].contains(o.status)
-    ).toList();
+    final activeOrders = ordersState.activeOrders
+        .where((o) => ![
+              'DELIVERED',
+              'FAILED',
+              'CANCELLED',
+              'RETURNED',
+              'delivered',
+              'failed',
+              'cancelled',
+              'returned'
+            ].contains(o.status))
+        .toList();
 
     if (ordersState.isLoading) {
       return ListView.builder(
@@ -155,7 +185,7 @@ class _ActiveOrdersTab extends ConsumerWidget {
           final order = activeOrders[index];
           return OrderCard(
             order: order,
-            onTap: () => context.push('/orders/${order.id}'),
+            onTap: () => onOrderTapped(order),
           );
         },
       ),
@@ -172,7 +202,8 @@ class _HistoryTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyState = ref.watch(orderHistoryProvider);
-    final orders = isCompleted ? historyState.completedOrders : historyState.failedOrders;
+    final orders =
+        isCompleted ? historyState.completedOrders : historyState.failedOrders;
 
     return Column(
       children: [
@@ -189,20 +220,26 @@ class _HistoryTab extends ConsumerWidget {
                 )
               : orders.isEmpty
                   ? _EmptyState(
-                      icon: isCompleted ? Icons.check_circle_outline : Icons.error_outline,
-                      title: isCompleted ? 'No Completed Orders' : 'No Failed Orders',
+                      icon: isCompleted
+                          ? Icons.check_circle_outline
+                          : Icons.error_outline,
+                      title: isCompleted
+                          ? 'No Completed Orders'
+                          : 'No Failed Orders',
                       subtitle: isCompleted
                           ? 'Completed deliveries will appear here'
                           : 'Failed deliveries will appear here',
                     )
                   : RefreshIndicator(
-                      onRefresh: () => ref.read(orderHistoryProvider.notifier).loadHistory(),
+                      onRefresh: () =>
+                          ref.read(orderHistoryProvider.notifier).loadHistory(),
                       child: ListView.builder(
                         padding: const EdgeInsets.only(top: 8, bottom: 100),
                         itemCount: orders.length,
                         itemBuilder: (context, index) {
                           final order = orders[index];
-                          return _HistoryOrderCard(order: order, isCompleted: isCompleted);
+                          return _HistoryOrderCard(
+                              order: order, isCompleted: isCompleted);
                         },
                       ),
                     ),
@@ -241,25 +278,33 @@ class _FilterBar extends ConsumerWidget {
                   _FilterChip(
                     label: 'Today',
                     isSelected: currentFilter == HistoryFilter.today,
-                    onTap: () => ref.read(orderHistoryProvider.notifier).setFilter(HistoryFilter.today),
+                    onTap: () => ref
+                        .read(orderHistoryProvider.notifier)
+                        .setFilter(HistoryFilter.today),
                   ),
                   const SizedBox(width: 8),
                   _FilterChip(
                     label: '7 Days',
                     isSelected: currentFilter == HistoryFilter.week,
-                    onTap: () => ref.read(orderHistoryProvider.notifier).setFilter(HistoryFilter.week),
+                    onTap: () => ref
+                        .read(orderHistoryProvider.notifier)
+                        .setFilter(HistoryFilter.week),
                   ),
                   const SizedBox(width: 8),
                   _FilterChip(
                     label: '30 Days',
                     isSelected: currentFilter == HistoryFilter.month,
-                    onTap: () => ref.read(orderHistoryProvider.notifier).setFilter(HistoryFilter.month),
+                    onTap: () => ref
+                        .read(orderHistoryProvider.notifier)
+                        .setFilter(HistoryFilter.month),
                   ),
                   const SizedBox(width: 8),
                   _FilterChip(
                     label: 'All Time',
                     isSelected: currentFilter == HistoryFilter.all,
-                    onTap: () => ref.read(orderHistoryProvider.notifier).setFilter(HistoryFilter.all),
+                    onTap: () => ref
+                        .read(orderHistoryProvider.notifier)
+                        .setFilter(HistoryFilter.all),
                   ),
                 ],
               ),
@@ -319,13 +364,17 @@ class _DateRangeButton extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: currentFilter == HistoryFilter.custom ? AppColors.primary : AppColors.surfaceVariant,
+          color: currentFilter == HistoryFilter.custom
+              ? AppColors.primary
+              : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
           Icons.calendar_today_outlined,
           size: 18,
-          color: currentFilter == HistoryFilter.custom ? Colors.white : AppColors.textSecondary,
+          color: currentFilter == HistoryFilter.custom
+              ? Colors.white
+              : AppColors.textSecondary,
         ),
       ),
     );
@@ -357,7 +406,9 @@ class _DateRangeButton extends ConsumerWidget {
     );
 
     if (picked != null) {
-      ref.read(orderHistoryProvider.notifier).setCustomDateRange(picked.start, picked.end);
+      ref
+          .read(orderHistoryProvider.notifier)
+          .setCustomDateRange(picked.start, picked.end);
     }
   }
 }
@@ -407,7 +458,8 @@ class _HistoryOrderCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: (isCompleted ? AppColors.success : AppColors.error).withOpacity(0.1),
+                color: (isCompleted ? AppColors.success : AppColors.error)
+                    .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -440,7 +492,9 @@ class _HistoryOrderCard extends StatelessWidget {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: isCompleted ? AppColors.success : AppColors.textPrimary,
+                          color: isCompleted
+                              ? AppColors.success
+                              : AppColors.textPrimary,
                         ),
                       ),
                     ],
@@ -448,7 +502,8 @@ class _HistoryOrderCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.person_outline, size: 14, color: AppColors.textTertiary),
+                      const Icon(Icons.person_outline,
+                          size: 14, color: AppColors.textTertiary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -460,7 +515,8 @@ class _HistoryOrderCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(Icons.access_time, size: 14, color: AppColors.textTertiary),
+                      const Icon(Icons.access_time,
+                          size: 14, color: AppColors.textTertiary),
                       const SizedBox(width: 4),
                       Text(
                         dateFormat.format(displayDate),
@@ -476,7 +532,8 @@ class _HistoryOrderCard extends StatelessWidget {
             ),
 
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textTertiary, size: 20),
           ],
         ),
       ),

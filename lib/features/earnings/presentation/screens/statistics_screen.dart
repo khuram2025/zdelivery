@@ -88,7 +88,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                         Expanded(
                           child: _TodayStatCard(
                             icon: Icons.route_rounded,
-                            value: '${stats?.today.distanceCoveredKm.toStringAsFixed(1) ?? 0} km',
+                            value:
+                                '${stats?.today.distanceCoveredKm.toStringAsFixed(1) ?? 0} km',
                             label: 'Distance',
                             color: AppColors.warning,
                           ),
@@ -133,16 +134,19 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             const SizedBox(height: 16),
                             _StatRow(
                               label: 'Total Deliveries',
-                              value: '${stats?.performance.totalDeliveries ?? 0}',
+                              value:
+                                  '${stats?.performance.totalDeliveries ?? 0}',
                             ),
                             _StatRow(
                               label: 'Successful',
-                              value: '${stats?.performance.successfulDeliveries ?? 0}',
+                              value:
+                                  '${stats?.performance.successfulDeliveries ?? 0}',
                               valueColor: AppColors.success,
                             ),
                             _StatRow(
                               label: 'Failed',
-                              value: '${stats?.performance.failedDeliveries ?? 0}',
+                              value:
+                                  '${stats?.performance.failedDeliveries ?? 0}',
                               valueColor: AppColors.error,
                             ),
                           ],
@@ -172,7 +176,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                 Column(
                                   children: [
                                     Text(
-                                      stats?.performance.averageRating.toStringAsFixed(1) ?? '0.0',
+                                      stats?.performance.averageRating
+                                              .toStringAsFixed(1) ??
+                                          '0.0',
                                       style: const TextStyle(
                                         fontSize: 48,
                                         fontWeight: FontWeight.bold,
@@ -183,7 +189,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                       children: List.generate(
                                         5,
                                         (index) => Icon(
-                                          index < (stats?.performance.averageRating.round() ?? 0)
+                                          index <
+                                                  (stats?.performance
+                                                          .averageRating
+                                                          .round() ??
+                                                      0)
                                               ? Icons.star_rounded
                                               : Icons.star_outline_rounded,
                                           color: AppColors.warning,
@@ -207,28 +217,41 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                     children: [
                                       _RatingBar(
                                         stars: 5,
-                                        count: stats?.ratingBreakdown.fiveStar ?? 0,
-                                        total: stats?.ratingBreakdown.total ?? 1,
+                                        count:
+                                            stats?.ratingBreakdown.fiveStar ??
+                                                0,
+                                        total:
+                                            stats?.ratingBreakdown.total ?? 1,
                                       ),
                                       _RatingBar(
                                         stars: 4,
-                                        count: stats?.ratingBreakdown.fourStar ?? 0,
-                                        total: stats?.ratingBreakdown.total ?? 1,
+                                        count:
+                                            stats?.ratingBreakdown.fourStar ??
+                                                0,
+                                        total:
+                                            stats?.ratingBreakdown.total ?? 1,
                                       ),
                                       _RatingBar(
                                         stars: 3,
-                                        count: stats?.ratingBreakdown.threeStar ?? 0,
-                                        total: stats?.ratingBreakdown.total ?? 1,
+                                        count:
+                                            stats?.ratingBreakdown.threeStar ??
+                                                0,
+                                        total:
+                                            stats?.ratingBreakdown.total ?? 1,
                                       ),
                                       _RatingBar(
                                         stars: 2,
-                                        count: stats?.ratingBreakdown.twoStar ?? 0,
-                                        total: stats?.ratingBreakdown.total ?? 1,
+                                        count:
+                                            stats?.ratingBreakdown.twoStar ?? 0,
+                                        total:
+                                            stats?.ratingBreakdown.total ?? 1,
                                       ),
                                       _RatingBar(
                                         stars: 1,
-                                        count: stats?.ratingBreakdown.oneStar ?? 0,
-                                        total: stats?.ratingBreakdown.total ?? 1,
+                                        count:
+                                            stats?.ratingBreakdown.oneStar ?? 0,
+                                        total:
+                                            stats?.ratingBreakdown.total ?? 1,
                                       ),
                                     ],
                                   ),
@@ -259,16 +282,19 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                           children: [
                             _StatRow(
                               label: 'Deliveries Completed',
-                              value: '${stats?.thisWeek.deliveriesCompleted ?? 0}',
+                              value:
+                                  '${stats?.thisWeek.deliveriesCompleted ?? 0}',
                             ),
                             _StatRow(
                               label: 'Total Earnings',
-                              value: stats?.thisWeek.earnings.currency ?? 'Rs 0',
+                              value:
+                                  stats?.thisWeek.earnings.currency ?? 'Rs 0',
                               valueColor: AppColors.success,
                             ),
                             _StatRow(
                               label: 'Daily Average',
-                              value: stats?.thisWeek.averagePerDay.currency ?? 'Rs 0',
+                              value: stats?.thisWeek.averagePerDay.currency ??
+                                  'Rs 0',
                             ),
                           ],
                         ),
@@ -307,7 +333,7 @@ class _TodayStatCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 24),

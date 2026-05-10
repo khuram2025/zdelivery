@@ -1,5 +1,350 @@
-Agent Info 
+# Delivery Agent Mobile API Audit
 
-username 03433828268
+Date: 2026-05-10
 
-Password Test@123
+Base URL: `http://54.166.200.11:8001/api/v1`
+
+This document defines the recommended mobile delivery contract for assigning orders from the business backend to an agent, completing COD or credit deliveries, reporting failed deliveries, updating customer GPS locations, and showing daily statistics.
+
+## Executive Summary
+
+The backend already supports the full operational flow, but the mobile app is currently using a mixed legacy contract under `/delivery/orders/`. That endpoint supports both `DeliveryAssignment` and `HomeDeliveryOrder` records. The mixed contract caused duplicate active rows and confusing IDs in the app.
+
+Backend fixes in this audit:
+
+- Removed duplicate active rows from `GET /delivery/orders/` when a `DeliveryAssignment` is linked to a `HomeDeliveryOrder`.
+- Made `date` filters use the delivery/scheduled date instead of only `created_at`.
+- Added `ARRIVED` to mobile active states so an arrived order does not disappear before delivery confirmation.
+- Added COD amount validation for delivery completion through the assignment route.
+- Added `collected_amount` as an alias for `cod_collected` on the legacy confirm-delivery endpoint.
+- Added `GET /delivery/mobile/summary/` for COD, credit, failed, active, and customer-level summary.
+- Allowed customer location update while the order is `ARRIVED`.
+
+## Recommended Mobile Contract
+
+Use the mobile-specific endpoints for new app work. Keep legacy endpoints only for backward compatibility.
+
+### Authentication
+
+Agent login:
+
+```http
+POST /api/v1/delivery/auth/login/
+Content-Type: application/json
+
+{
+  "mobile_number": "03101234567",
+  "password": "Read@123"
+}
+```
+
+Business owner login:
+
+```http
+POST /api/v1/accounts/login/
+Content-Type: application/json
+
+{
+  "mobile_number": "03006301527",
+  "password": "Read@123"
+}
+```
+
+Use `Authorization: Bearer <access_token>` for all protected requests.
+
+## Business Owner Flow
+
+The owner creates or selects an order, prepares it, and assigns it to an agent.
+
+1. List agents:
+
+```http
+GET /api/v1/delivery/business/agents/
+```
+
+2. List orders:
+
+```http
+GET /api/v1/delivery/business/orders/?date=today
+GET /api/v1/delivery/business/orders/?date=all
+```
+
+3. Move order to ready if needed:
+
+```http
+POST /api/v1/delivery/business/orders/{order_id}/status/
+
+{ "status": "READY" }
+```
+
+4. Assign order:
+
+```http
+POST /api/v1/delivery/business/orders/{order_id}/assign/
+
+{ "agent_id": 1 }
+```
+
+Successful assignment returns the assigned agent and changes the order to `ASSIGNED`.
+
+## Agent App Screens
+
+### Dashboard
+
+Use:
+
+```http
+GET /api/v1/delivery/mobile/dashboard/
+GET /api/v1/delivery/mobile/summary/?date=today
+```
+
+`/mobile/dashboard/` gives the profile, active orders, and basic stats.
+
+`/mobile/summary/` gives operational cards:
+
+- active order counts by status
+- delivered, failed, cancelled counts
+- COD delivered and COD still to collect
+- credit delivered amount
+- credit customer list
+- COD customer list
+- failed reason counts
+
+### Active Orders
+
+Recommended:
+
+```http
+GET /api/v1/delivery/mobile/orders/?type=active
+GET /api/v1/delivery/mobile/orders/?type=active&date=2026-05-10
+```
+
+Legacy compatible:
+
+```http
+GET /api/v1/delivery/orders/
+GET /api/v1/delivery/orders/?date=2026-05-10
+```
+
+Important: if the UI label says "Today", pass `date=YYYY-MM-DD`. Without a date, the API returns the agent's whole active backlog.
+
+### Order Detail
+
+Recommended:
+
+```http
+GET /api/v1/delivery/mobile/orders/{order_id}/
+```
+
+Legacy compatible:
+
+```http
+GET /api/v1/delivery/orders/{id}/
+```
+
+Prefer `order_id` from `/delivery/mobile/orders/`. Avoid mixing `assignment_id` and `order_id` in app state.
+
+## Delivery State Flow
+
+Recommended mobile flow:
+
+1. Start delivery:
+
+```http
+POST /api/v1/delivery/mobile/orders/{order_id}/status/
+
+{
+  "status": "OUT_FOR_DELIVERY",
+  "latitude": 31.5204,
+  "longitude": 74.3587,
+  "notes": "Picked up"
+}
+```
+
+2. Arrive:
+
+```http
+POST /api/v1/delivery/mobile/orders/{order_id}/status/
+
+{
+  "status": "ARRIVED",
+  "latitude": 31.5204,
+  "longitude": 74.3587
+}
+```
+
+3. Complete delivery:
+
+```http
+POST /api/v1/delivery/mobile/orders/{order_id}/complete/
+Content-Type: multipart/form-data
+
+recipient_name=Customer Name
+delivery_notes=Delivered to customer
+collected_amount=500.00
+latitude=31.5204
+longitude=74.3587
+delivery_photo=<optional file>
+signature_image=<optional file>
+```
+
+For COD orders, `collected_amount` must be at least the order total.
+
+For credit orders, no cash collection is required. The backend records the delivery as credit and creates the customer wallet entry.
+
+Legacy confirm delivery remains supported:
+
+```http
+POST /api/v1/delivery/orders/{id}/deliver/
+Content-Type: multipart/form-data
+
+cod_collected=500.00
+```
+
+The legacy endpoint also accepts `collected_amount` now.
+
+## Failed Delivery Flow
+
+Use when the customer is not available, address is wrong, customer refuses, payment fails, etc.
+
+```http
+POST /api/v1/delivery/mobile/orders/{order_id}/fail/
+
+{
+  "failure_reason": "CUSTOMER_UNAVAILABLE",
+  "failure_notes": "Called three times, no response",
+  "latitude": 31.5204,
+  "longitude": 74.3587
+}
+```
+
+Allowed reasons:
+
+- `CUSTOMER_UNAVAILABLE`
+- `WRONG_ADDRESS`
+- `CUSTOMER_REFUSED`
+- `DAMAGED_GOODS`
+- `PAYMENT_ISSUE`
+- `WEATHER`
+- `VEHICLE_ISSUE`
+- `OTHER`
+
+## Customer Location Update
+
+Use when the customer GPS is missing or wrong.
+
+```http
+POST /api/v1/delivery/mobile/orders/{order_id}/update-customer-location/
+
+{
+  "latitude": 31.4504,
+  "longitude": 74.3587,
+  "address": "Near City Park, Main Gate",
+  "notes": "Customer requested back gate"
+}
+```
+
+Backend behavior:
+
+- If the customer has no saved GPS, the customer location is updated directly.
+- If the customer already has GPS, a pending location update is created for approval.
+- The current delivery order location is updated immediately.
+- Other pending orders for that customer are updated only when the customer had no previous GPS.
+
+## Summary Endpoint
+
+```http
+GET /api/v1/delivery/mobile/summary/?date=2026-05-10
+GET /api/v1/delivery/mobile/summary/?start_date=2026-05-01&end_date=2026-05-10
+```
+
+Response shape:
+
+```json
+{
+  "success": true,
+  "data": {
+    "period": {
+      "start_date": "2026-05-10",
+      "end_date": "2026-05-10"
+    },
+    "workload": {
+      "scheduled_orders": 3,
+      "active_orders": 1,
+      "status_counts": {
+        "ASSIGNED": 1
+      },
+      "active_status_counts": {
+        "ASSIGNED": 1
+      }
+    },
+    "completion": {
+      "delivered": 2,
+      "failed": 1,
+      "cancelled": 0,
+      "success_rate": 66.7
+    },
+    "payments": {
+      "breakdown": {
+        "COD": { "label": "Cash on Delivery", "orders": 1, "amount": 500.0 },
+        "PREPAID": { "label": "Already Paid", "orders": 0, "amount": 0.0 },
+        "CREDIT": { "label": "Pay Later (Credit)", "orders": 1, "amount": 300.0 }
+      },
+      "cod_to_collect": { "orders": 1, "amount": 500.0 },
+      "cod_collected": { "orders": 1, "amount": 500.0 },
+      "credit_delivered": { "orders": 1, "amount": 300.0 }
+    },
+    "failed_reasons": {
+      "CUSTOMER_UNAVAILABLE": 1
+    },
+    "credit_customers": [
+      {
+        "order_id": 123,
+        "order_number": "HD-20260510-0001",
+        "customer_name": "Customer",
+        "customer_mobile": "03000000000",
+        "amount": 300.0,
+        "payment_status": "PENDING",
+        "delivered_at": "2026-05-10T12:00:00+05:00"
+      }
+    ],
+    "cod_customers": []
+  }
+}
+```
+
+## Mobile Team Changes Required
+
+1. Prefer `/delivery/mobile/orders/` for the active tab and use only `order.id` for detail/actions.
+2. If showing a "Today" tab or chip, pass `date=YYYY-MM-DD`.
+3. Use `/delivery/mobile/orders/{id}/status/` for `OUT_FOR_DELIVERY` and `ARRIVED`.
+4. Use `/delivery/mobile/orders/{id}/complete/` for final delivery.
+5. For COD, send `collected_amount` as a numeric string or number. Block the confirm button until it is at least the order total.
+6. For credit, hide COD collection and label the payment as credit.
+7. After every state-changing request, trust only a success response where the returned `status` or `new_status` matches the expected terminal state. Then reload detail.
+8. Add `/delivery/mobile/summary/?date=today` to the dashboard screen for cash, credit, and failed-delivery cards.
+9. Show customer-level credit and COD lists from the summary endpoint instead of calculating them on-device.
+
+## Verification Checklist
+
+Use a test order in a non-production dataset where possible.
+
+1. Business owner logs in through `/accounts/login/`.
+2. Business owner creates or selects an order.
+3. Business owner marks it `READY` if needed.
+4. Business owner assigns it to the target agent.
+5. Agent logs in through `/delivery/auth/login/`.
+6. Agent sees the order in `/delivery/mobile/orders/?type=active`.
+7. Agent opens `/delivery/mobile/orders/{id}/`.
+8. Agent updates customer location if GPS is missing or wrong.
+9. Agent marks `OUT_FOR_DELIVERY`.
+10. Agent marks `ARRIVED`.
+11. COD path: agent completes with `collected_amount >= total`.
+12. Credit path: agent completes without cash collection.
+13. Failed path: agent posts `/fail/` with a valid `failure_reason`.
+14. Dashboard summary reflects delivered COD, delivered credit, failed orders, and customer lists.
+15. Business order list no longer shows the delivered order as pending/assigned.
+
+## Known Design Decision
+
+The legacy `/delivery/orders/` endpoint remains available because the current app uses it. New mobile work should migrate to `/delivery/mobile/*` to avoid assignment-vs-order ID ambiguity.

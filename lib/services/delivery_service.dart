@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import '../core/constants/api_constants.dart';
 import '../features/dashboard/data/models.dart';
 import '../features/orders/data/models.dart';
@@ -66,22 +67,21 @@ class DeliveryService {
     );
   }
 
-  // Orders
+  // Orders — uses recommended /delivery/mobile/orders/?type=active contract
   Future<Map<String, dynamic>> getOrders({String? status, String? date}) async {
     final response = await _apiService.get(
       ApiConstants.orders,
       queryParameters: {
+        'type': 'active',
         if (status != null) 'status': status,
         if (date != null) 'date': date,
       },
     );
     final responseData = response.data;
-    // Handle different API response structures
     if (responseData is Map<String, dynamic>) {
       if (responseData['data'] is Map<String, dynamic>) {
         return responseData['data'];
       } else if (responseData['data'] is List) {
-        // If data is directly a list of orders
         return {'orders': responseData['data']};
       }
       return responseData;
@@ -116,8 +116,10 @@ class DeliveryService {
         if (limit != null) 'limit': limit.toString(),
       },
     );
-    final List<dynamic> data = response.data['data']?['orders'] ?? response.data['data'] ?? [];
-    final List<DeliveryOrder> orders = data.map((e) => DeliveryOrder.fromJson(e)).toList();
+    final List<dynamic> data =
+        response.data['data']?['orders'] ?? response.data['data'] ?? [];
+    final List<DeliveryOrder> orders =
+        data.map((e) => DeliveryOrder.fromJson(e)).toList();
     return orders;
   }
 
@@ -126,7 +128,8 @@ class DeliveryService {
     return DeliveryOrderDetail.fromJson(response.data['data']);
   }
 
-  Future<Map<String, dynamic>> acceptOrder(int id, {double? latitude, double? longitude}) async {
+  Future<Map<String, dynamic>> acceptOrder(int id,
+      {double? latitude, double? longitude}) async {
     final response = await _apiService.post(
       ApiConstants.acceptOrder(id),
       data: {
@@ -137,7 +140,8 @@ class DeliveryService {
     return response.data;
   }
 
-  Future<Map<String, dynamic>> rejectOrder(int id, {required String reason, double? latitude, double? longitude}) async {
+  Future<Map<String, dynamic>> rejectOrder(int id,
+      {required String reason, double? latitude, double? longitude}) async {
     final response = await _apiService.post(
       ApiConstants.rejectOrder(id),
       data: {
@@ -169,27 +173,35 @@ class DeliveryService {
     return response.data;
   }
 
-  Future<Map<String, dynamic>> startTransit(int id, {double? latitude, double? longitude}) async {
+  // Unified status update via /delivery/mobile/orders/{id}/status/
+  Future<Map<String, dynamic>> updateOrderStatus(
+    int id, {
+    required String status,
+    double? latitude,
+    double? longitude,
+    String? notes,
+  }) async {
     final response = await _apiService.post(
-      ApiConstants.inTransitOrder(id),
+      ApiConstants.orderStatus(id),
       data: {
-        if (latitude != null) 'latitude': latitude.toString(),
-        if (longitude != null) 'longitude': longitude.toString(),
+        'status': status,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (notes != null) 'notes': notes,
       },
     );
     return response.data;
   }
 
-  Future<Map<String, dynamic>> markArrived(int id, {double? latitude, double? longitude}) async {
-    final response = await _apiService.post(
-      ApiConstants.arrivedOrder(id),
-      data: {
-        if (latitude != null) 'latitude': latitude.toString(),
-        if (longitude != null) 'longitude': longitude.toString(),
-      },
-    );
-    return response.data;
-  }
+  Future<Map<String, dynamic>> startTransit(int id,
+          {double? latitude, double? longitude}) =>
+      updateOrderStatus(id,
+          status: 'OUT_FOR_DELIVERY', latitude: latitude, longitude: longitude);
+
+  Future<Map<String, dynamic>> markArrived(int id,
+          {double? latitude, double? longitude}) =>
+      updateOrderStatus(id,
+          status: 'ARRIVED', latitude: latitude, longitude: longitude);
 
   Future<Map<String, dynamic>> completeDelivery(
     int id, {
@@ -200,21 +212,44 @@ class DeliveryService {
     double? codCollected,
     File? deliveryPhoto,
     File? signatureImage,
+    DateTime? deliveredAt,
   }) async {
-    final response = await _apiService.postMultipart(
-      ApiConstants.deliverOrder(id),
-      data: {
-        if (latitude != null) 'latitude': latitude.toString(),
-        if (longitude != null) 'longitude': longitude.toString(),
-        if (recipientName != null) 'recipient_name': recipientName,
-        if (deliveryNotes != null) 'delivery_notes': deliveryNotes,
-        if (codCollected != null) 'cod_collected': codCollected.toString(),
-      },
-      file: deliveryPhoto,
-      fileField: 'delivery_photo',
-      signatureFile: signatureImage,
-    );
-    return response.data;
+    final deliveryTimestamp = (deliveredAt ?? DateTime.now()).toUtc();
+    final payload = {
+      'delivered_at': deliveryTimestamp.toIso8601String(),
+      if (latitude != null) 'latitude': latitude.toString(),
+      if (longitude != null) 'longitude': longitude.toString(),
+      if (recipientName != null) 'recipient_name': recipientName,
+      if (deliveryNotes != null) 'delivery_notes': deliveryNotes,
+      if (codCollected != null)
+        'collected_amount': codCollected.toStringAsFixed(2),
+    };
+
+    if (deliveryPhoto == null && signatureImage == null) {
+      final response = await _apiService.post(
+        ApiConstants.completeOrder(id),
+        data: payload,
+      );
+      return response.data;
+    }
+
+    try {
+      final response = await _apiService.postMultipart(
+        ApiConstants.completeOrder(id),
+        data: payload,
+        file: deliveryPhoto,
+        fileField: 'delivery_photo',
+        signatureFile: signatureImage,
+      );
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 415) rethrow;
+      final response = await _apiService.post(
+        ApiConstants.completeOrder(id),
+        data: payload,
+      );
+      return response.data;
+    }
   }
 
   Future<Map<String, dynamic>> failDelivery(
@@ -273,7 +308,8 @@ class DeliveryService {
   }
 
   // Earnings & Statistics
-  Future<EarningsData> getEarnings({String? period, String? startDate, String? endDate}) async {
+  Future<EarningsData> getEarnings(
+      {String? period, String? startDate, String? endDate}) async {
     final response = await _apiService.get(
       ApiConstants.agentEarnings,
       queryParameters: {
@@ -305,5 +341,21 @@ class DeliveryService {
       },
     );
     return DashboardData.fromJson(response.data['data']);
+  }
+
+  Future<MobileDeliverySummary> getMobileSummary({
+    String? date,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final response = await _apiService.get(
+      ApiConstants.mobileSummary,
+      queryParameters: {
+        if (date != null) 'date': date,
+        if (startDate != null) 'start_date': startDate,
+        if (endDate != null) 'end_date': endDate,
+      },
+    );
+    return MobileDeliverySummary.fromJson(response.data['data']);
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,11 +25,30 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
+  Timer? _autoBackTimer;
+  bool _autoBackScheduled = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoBackTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleAutoBack() {
+    if (_autoBackScheduled) return;
+    _autoBackScheduled = true;
+    _autoBackTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        context.pop();
+      }
     });
   }
 
@@ -40,7 +60,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
-  void _openNavigation({String? url, double? latitude, double? longitude, String? address}) async {
+  void _openNavigation(
+      {String? url,
+      double? latitude,
+      double? longitude,
+      String? address}) async {
     // Build the destination string
     String? destination;
     if (latitude != null && longitude != null) {
@@ -66,16 +90,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     if (destination != null) {
       final encodedDest = Uri.encodeComponent(destination);
       // Google Maps URL (works on most devices)
-      urlsToTry.add(Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedDest'));
+      urlsToTry.add(Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=$encodedDest'));
       // Geo URI scheme (Android native)
       urlsToTry.add(Uri.parse('geo:0,0?q=$encodedDest'));
       // Google Maps with directions
-      urlsToTry.add(Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$encodedDest&travelmode=driving'));
+      urlsToTry.add(Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=$encodedDest&travelmode=driving'));
     }
 
     for (final uri in urlsToTry) {
       try {
-        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        final launched =
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
         if (launched) {
           return; // Successfully launched
         }
@@ -88,7 +115,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     // If all attempts failed
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open maps. Please install Google Maps.')),
+        const SnackBar(
+            content: Text('Could not open maps. Please install Google Maps.')),
       );
     }
   }
@@ -109,7 +137,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(orderDetailProvider(widget.orderId));
     final order = state.order;
-    final showActionButton = order != null && !_isCompletedOrFailed(order.status);
+    final showActionButton =
+        order != null && !_isCompletedOrFailed(order.status);
+
+    // Auto-navigate back when order is completed or failed
+    if (order != null && _isCompletedOrFailed(order.status)) {
+      _scheduleAutoBack();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -120,17 +154,54 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           onPressed: () => context.pop(),
         ),
       ),
+      bottomNavigationBar: showActionButton
+          ? _ActionBottomSheet(
+              order: order,
+              isLoading: state.isActionLoading,
+            )
+          : null,
       body: Stack(
         children: [
           _buildBody(state, order),
-          if (showActionButton)
+          // Auto-back countdown banner
+          if (order != null && _isCompletedOrFailed(order.status))
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: _ActionBottomSheet(
-                order: order!,
-                isLoading: state.isActionLoading,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                color: order.status.toLowerCase().contains('delivered')
+                    ? AppColors.success
+                    : AppColors.error,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Returning to orders in 5 seconds...',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => context.pop(),
+                      child: const Text(
+                        'Go Now',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -139,7 +210,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   bool _isCompletedOrFailed(String status) {
-    return ['delivered', 'DELIVERED', 'failed', 'FAILED', 'cancelled', 'CANCELLED'].contains(status);
+    return [
+      'delivered',
+      'DELIVERED',
+      'failed',
+      'FAILED',
+      'cancelled',
+      'CANCELLED'
+    ].contains(status);
   }
 
   Widget _buildBody(OrderDetailState state, DeliveryOrderDetail? order) {
@@ -160,13 +238,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               const SizedBox(height: 16),
               Text(
                 state.error!,
-                style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                style: const TextStyle(
+                    fontSize: 16, color: AppColors.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () {
-                  ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
+                  ref
+                      .read(orderDetailProvider(widget.orderId).notifier)
+                      .loadOrderDetail();
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
@@ -184,7 +265,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
     return RefreshIndicator(
       onRefresh: () async {
-        await ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
+        await ref
+            .read(orderDetailProvider(widget.orderId).notifier)
+            .loadOrderDetail();
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -237,7 +320,7 @@ class _StatusHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: order.status.statusColor.withOpacity(0.1),
+        color: order.status.statusColor.withValues(alpha: 0.1),
       ),
       child: Column(
         children: [
@@ -297,7 +380,8 @@ class _OrderInfoCard extends StatelessWidget {
             _InfoRow('Distance', '${order.distanceKm.toStringAsFixed(1)} km'),
             _InfoRow('Commission', order.agentCommission.currency),
             if (order.route != null)
-              _InfoRow('Est. Duration', '${order.route!.estimatedDurationMinutes} mins'),
+              _InfoRow('Est. Duration',
+                  '${order.route!.estimatedDurationMinutes} mins'),
           ],
         ),
       ),
@@ -379,10 +463,11 @@ class _LocationsCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.info.withOpacity(0.1),
+                        color: AppColors.info.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.store, color: AppColors.info, size: 20),
+                      child: const Icon(Icons.store,
+                          color: AppColors.info, size: 20),
                     ),
                     Container(
                       width: 2,
@@ -430,10 +515,11 @@ class _LocationsCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
+                    color: AppColors.success.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.location_on, color: AppColors.success, size: 20),
+                  child: const Icon(Icons.location_on,
+                      color: AppColors.success, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -572,7 +658,8 @@ class _OrderItemsCard extends StatelessWidget {
                 ),
                 subtitle: Text(
                   'Qty: ${item.quantity} x ${item.unitPrice.currency}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
                 ),
                 trailing: Text(
                   item.lineTotal.currency,
@@ -619,7 +706,7 @@ class _CodCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.success.withOpacity(0.3)),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -627,10 +714,11 @@ class _CodCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.payments_outlined, color: AppColors.success),
+              child:
+                  const Icon(Icons.payments_outlined, color: AppColors.success),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -750,23 +838,26 @@ class _ActionBottomSheet extends ConsumerWidget {
         order.status == DeliveryStatus.outForDelivery ||
         order.status == DeliveryStatus.arrived;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isReadyForCompletion) ...[
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isReadyForCompletion) ...[
               // Simplified flow: After pickup, show Complete/Fail options directly
               Row(
                 children: [
@@ -797,16 +888,23 @@ class _ActionBottomSheet extends ConsumerWidget {
                 ],
               ),
             ] else
-              CustomButton(
-                text: actionInfo['text'],
-                onPressed: () => _handleAction(context, ref, order.status),
-                isLoading: isLoading,
-                icon: actionInfo['icon'],
-                backgroundColor: actionInfo['color'],
-                width: double.infinity,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: isLoading
+                    ? null
+                    : () => _handleAction(context, ref, order.status),
+                child: CustomButton(
+                  text: actionInfo['text'],
+                  onPressed: () => _handleAction(context, ref, order.status),
+                  isLoading: isLoading,
+                  icon: actionInfo['icon'],
+                  backgroundColor: actionInfo['color'],
+                  width: double.infinity,
+                ),
               ),
           ],
         ),
+      ),
     );
   }
 
@@ -814,14 +912,14 @@ class _ActionBottomSheet extends ConsumerWidget {
     switch (status) {
       case DeliveryStatus.assigned:
         return {
-          'text': 'Accept Order',
-          'icon': Icons.check_circle_outline,
-          'color': AppColors.success,
+          'text': 'Start Delivery',
+          'icon': Icons.local_shipping_outlined,
+          'color': AppColors.primary,
         };
       case DeliveryStatus.accepted:
         return {
-          'text': 'Mark as Picked Up',
-          'icon': Icons.inventory_2_outlined,
+          'text': 'Start Delivery',
+          'icon': Icons.local_shipping_outlined,
           'color': AppColors.primary,
         };
       // After pickup, go directly to Complete Delivery (simplified flow)
@@ -839,16 +937,17 @@ class _ActionBottomSheet extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleAction(BuildContext context, WidgetRef ref, String status) async {
+  Future<void> _handleAction(
+      BuildContext context, WidgetRef ref, String status) async {
     final notifier = ref.read(orderDetailProvider(order.id).notifier);
     bool success = false;
 
     switch (status) {
       case DeliveryStatus.assigned:
-        success = await notifier.acceptOrder();
+        success = await notifier.startTransit();
         break;
       case DeliveryStatus.accepted:
-        success = await notifier.pickupOrder();
+        success = await notifier.startTransit();
         break;
       case DeliveryStatus.pickedUp:
         success = await notifier.startTransit();
@@ -861,7 +960,8 @@ class _ActionBottomSheet extends ConsumerWidget {
     if (context.mounted && !success) {
       // Show error only on failure
       final state = ref.read(orderDetailProvider(order.id));
-      final errorMessage = state.actionError ?? 'Action failed. Please try again.';
+      final errorMessage =
+          state.actionError ?? 'Action failed. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
@@ -896,10 +996,12 @@ class _CompleteDeliverySheet extends ConsumerStatefulWidget {
   const _CompleteDeliverySheet({required this.order});
 
   @override
-  ConsumerState<_CompleteDeliverySheet> createState() => _CompleteDeliverySheetState();
+  ConsumerState<_CompleteDeliverySheet> createState() =>
+      _CompleteDeliverySheetState();
 }
 
-class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> {
+class _CompleteDeliverySheetState
+    extends ConsumerState<_CompleteDeliverySheet> {
   final _recipientController = TextEditingController();
   final _notesController = TextEditingController();
   final _codController = TextEditingController();
@@ -946,10 +1048,11 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
     if (widget.order.isCod) {
       codCollected = double.tryParse(_codController.text);
       final expectedAmount = _codAmountToCollect;
-      if (codCollected == null || codCollected != expectedAmount) {
+      if (codCollected == null || codCollected < expectedAmount) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Please collect exact amount: ${expectedAmount.currency}'),
+            content: Text(
+                'Collected amount must be at least ${expectedAmount.currency}'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -960,8 +1063,11 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
 
     final notifier = ref.read(orderDetailProvider(widget.order.id).notifier);
     final success = await notifier.completeDelivery(
-      recipientName: _recipientController.text.isNotEmpty ? _recipientController.text : null,
-      deliveryNotes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      recipientName: _recipientController.text.isNotEmpty
+          ? _recipientController.text
+          : null,
+      deliveryNotes:
+          _notesController.text.isNotEmpty ? _notesController.text : null,
       codCollected: codCollected,
       deliveryPhoto: _deliveryPhoto,
     );
@@ -1018,7 +1124,63 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              // Payment Method Info
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: widget.order.isCod
+                      ? AppColors.warning.withValues(alpha: 0.1)
+                      : AppColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: widget.order.isCod
+                        ? AppColors.warning.withValues(alpha: 0.3)
+                        : AppColors.success.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.order.isCod
+                          ? Icons.payments_outlined
+                          : Icons.credit_card,
+                      color: widget.order.isCod
+                          ? AppColors.warning
+                          : AppColors.success,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Payment: ${widget.order.order?.paymentMethod ?? 'N/A'}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: widget.order.isCod
+                                  ? AppColors.warning
+                                  : AppColors.success,
+                            ),
+                          ),
+                          Text(
+                            widget.order.isCod
+                                ? 'Collect ${_codAmountToCollect.currency} from customer'
+                                : 'No cash collection needed',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
               // Photo
               GestureDetector(
                 onTap: _pickImage,
@@ -1038,7 +1200,8 @@ class _CompleteDeliverySheetState extends ConsumerState<_CompleteDeliverySheet> 
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.camera_alt_outlined, size: 32, color: AppColors.textTertiary),
+                            Icon(Icons.camera_alt_outlined,
+                                size: 32, color: AppColors.textTertiary),
                             SizedBox(height: 8),
                             Text(
                               'Take Delivery Photo',
@@ -1123,7 +1286,8 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
     final notifier = ref.read(orderDetailProvider(widget.orderId).notifier);
     final success = await notifier.failDelivery(
       failureReason: _selectedReason!,
-      failureNotes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      failureNotes:
+          _notesController.text.isNotEmpty ? _notesController.text : null,
     );
 
     setState(() => _isLoading = false);
@@ -1184,15 +1348,16 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
                 ),
               ),
               const SizedBox(height: 24),
-              ...FailureReason.displayNames.entries.map((entry) => RadioListTile<String>(
-                    title: Text(entry.value),
-                    value: entry.key,
-                    groupValue: _selectedReason,
-                    onChanged: (value) {
-                      setState(() => _selectedReason = value);
-                    },
-                    contentPadding: EdgeInsets.zero,
-                  )),
+              ...FailureReason.displayNames.entries
+                  .map((entry) => RadioListTile<String>(
+                        title: Text(entry.value),
+                        value: entry.key,
+                        groupValue: _selectedReason,
+                        onChanged: (value) {
+                          setState(() => _selectedReason = value);
+                        },
+                        contentPadding: EdgeInsets.zero,
+                      )),
               const SizedBox(height: 16),
               TextField(
                 controller: _notesController,
@@ -1239,7 +1404,8 @@ class _UpdateLocationSheet extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_UpdateLocationSheet> createState() => _UpdateLocationSheetState();
+  ConsumerState<_UpdateLocationSheet> createState() =>
+      _UpdateLocationSheetState();
 }
 
 class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
@@ -1298,7 +1464,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
 
       if (permission == LocationPermission.deniedForever) {
         setState(() {
-          _locationError = 'Location permissions are permanently denied. Please enable in settings.';
+          _locationError =
+              'Location permissions are permanently denied. Please enable in settings.';
           _isLoadingLocation = false;
         });
         return;
@@ -1338,7 +1505,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
     final success = await notifier.updateCustomerLocation(
       latitude: _currentPosition!.latitude,
       longitude: _currentPosition!.longitude,
-      address: _addressController.text.isNotEmpty ? _addressController.text : null,
+      address:
+          _addressController.text.isNotEmpty ? _addressController.text : null,
       notes: _notesController.text.isNotEmpty ? _notesController.text : null,
     );
 
@@ -1349,8 +1517,9 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(success
-            ? 'Customer location updated successfully!'
-            : (ref.read(orderDetailProvider(widget.orderId)).actionError ?? 'Failed to update location')),
+              ? 'Customer location updated successfully!'
+              : (ref.read(orderDetailProvider(widget.orderId)).actionError ??
+                  'Failed to update location')),
           backgroundColor: success ? AppColors.success : AppColors.error,
         ),
       );
@@ -1466,7 +1635,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                                   _currentPosition!.latitude,
                                   _currentPosition!.longitude,
                                 ),
-                                infoWindow: const InfoWindow(title: 'Customer Location'),
+                                infoWindow: const InfoWindow(
+                                    title: 'Customer Location'),
                               ),
                             },
                             myLocationEnabled: false,
@@ -1513,7 +1683,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                             top: 10,
                             left: 10,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
                                 color: AppColors.success,
                                 borderRadius: BorderRadius.circular(20),
@@ -1528,7 +1699,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.check_circle, color: Colors.white, size: 14),
+                                  Icon(Icons.check_circle,
+                                      color: Colors.white, size: 14),
                                   SizedBox(width: 4),
                                   Text(
                                     'Location Found',
@@ -1555,13 +1727,15 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.15),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.15),
                                       blurRadius: 4,
                                       offset: const Offset(0, 2),
                                     ),
                                   ],
                                 ),
-                                child: const Icon(Icons.refresh, size: 18, color: AppColors.primary),
+                                child: const Icon(Icons.refresh,
+                                    size: 18, color: AppColors.primary),
                               ),
                             ),
                           ),
@@ -1571,14 +1745,16 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                     const SizedBox(height: 10),
                     // Coordinates display
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceVariant,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.gps_fixed, color: AppColors.primary, size: 16),
+                          const Icon(Icons.gps_fixed,
+                              color: AppColors.primary, size: 16),
                           const SizedBox(width: 8),
                           Text(
                             '${_currentPosition!.latitude.toStringAsFixed(6)}, ${_currentPosition!.longitude.toStringAsFixed(6)}',
@@ -1608,9 +1784,13 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        _locationError != null ? Icons.location_off : Icons.location_searching,
+                        _locationError != null
+                            ? Icons.location_off
+                            : Icons.location_searching,
                         size: 40,
-                        color: _locationError != null ? AppColors.error : AppColors.textTertiary,
+                        color: _locationError != null
+                            ? AppColors.error
+                            : AppColors.textTertiary,
                       ),
                       const SizedBox(height: 12),
                       if (_locationError != null) ...[
@@ -1618,7 +1798,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             _locationError!,
-                            style: const TextStyle(color: AppColors.error, fontSize: 13),
+                            style: const TextStyle(
+                                color: AppColors.error, fontSize: 13),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -1668,7 +1849,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                     flex: 2,
                     child: CustomButton(
                       text: 'Update Location',
-                      onPressed: _currentPosition != null ? _updateLocation : null,
+                      onPressed:
+                          _currentPosition != null ? _updateLocation : null,
                       isLoading: _isUpdating,
                       icon: Icons.save,
                       backgroundColor: AppColors.primary,

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -46,7 +45,8 @@ class _OrdersMapViewState extends State<OrdersMapView> {
 
   void _buildMarkers() {
     final markers = <Marker>{};
-    final ordersWithCoords = widget.orders.where((o) => o.hasDeliveryCoordinates).toList();
+    final ordersWithCoords =
+        widget.orders.where((o) => o.hasDeliveryCoordinates).toList();
 
     if (ordersWithCoords.isEmpty) {
       setState(() => _markers = markers);
@@ -76,7 +76,8 @@ class _OrdersMapViewState extends State<OrdersMapView> {
         Marker(
           markerId: MarkerId('delivery_${order.id}'),
           position: LatLng(order.deliveryLatitude!, order.deliveryLongitude!),
-          icon: BitmapDescriptor.defaultMarkerWithHue(_getMarkerHue(order.status)),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+              _getMarkerHue(order.status)),
           infoWindow: InfoWindow(
             title: order.orderNumber ?? order.assignmentNumber,
             snippet: '${order.customerName ?? 'Customer'} - ${order.status}',
@@ -130,10 +131,18 @@ class _OrdersMapViewState extends State<OrdersMapView> {
       double maxLng = -double.infinity;
 
       for (final marker in _markers) {
-        if (marker.position.latitude < minLat) minLat = marker.position.latitude;
-        if (marker.position.latitude > maxLat) maxLat = marker.position.latitude;
-        if (marker.position.longitude < minLng) minLng = marker.position.longitude;
-        if (marker.position.longitude > maxLng) maxLng = marker.position.longitude;
+        if (marker.position.latitude < minLat) {
+          minLat = marker.position.latitude;
+        }
+        if (marker.position.latitude > maxLat) {
+          maxLat = marker.position.latitude;
+        }
+        if (marker.position.longitude < minLng) {
+          minLng = marker.position.longitude;
+        }
+        if (marker.position.longitude > maxLng) {
+          maxLng = marker.position.longitude;
+        }
       }
 
       final bounds = LatLngBounds(
@@ -149,7 +158,8 @@ class _OrdersMapViewState extends State<OrdersMapView> {
 
   @override
   Widget build(BuildContext context) {
-    final ordersWithCoordinates = widget.orders.where((o) => o.hasDeliveryCoordinates).toList();
+    final ordersWithCoordinates =
+        widget.orders.where((o) => o.hasDeliveryCoordinates).toList();
 
     if (ordersWithCoordinates.isEmpty) {
       return Center(
@@ -333,7 +343,8 @@ class _OrderCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.location_on_outlined, size: 16, color: AppColors.textTertiary),
+                  Icon(Icons.location_on_outlined,
+                      size: 16, color: AppColors.textTertiary),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -353,9 +364,11 @@ class _OrderCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(order.status).withValues(alpha: 0.1),
+                      color:
+                          _getStatusColor(order.status).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(

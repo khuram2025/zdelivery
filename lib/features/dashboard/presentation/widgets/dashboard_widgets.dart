@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
 import '../../data/models.dart';
@@ -43,18 +44,21 @@ class TodayStatsCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withAlpha(50),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.access_time, color: Colors.white70, size: 14),
+                    const Icon(Icons.access_time,
+                        color: Colors.white70, size: 14),
                     const SizedBox(width: 4),
                     Text(
                       '${snapshot.hoursOnline.toStringAsFixed(1)}h online',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),
@@ -557,7 +561,8 @@ class CodSummaryCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: AppColors.warning, size: 18),
+                  const Icon(Icons.info_outline,
+                      color: AppColors.warning, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -617,6 +622,320 @@ class _CodStatItem extends StatelessWidget {
             style: const TextStyle(
               fontSize: 11,
               color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MobileSummaryCard extends StatelessWidget {
+  final MobileDeliverySummary summary;
+
+  const MobileSummaryCard({super.key, required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardCard(
+      title: 'Delivery Summary',
+      icon: Icons.analytics_outlined,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryStat(
+                  label: 'Active',
+                  value: '${summary.workload.activeOrders}',
+                  color: AppColors.primary,
+                  icon: Icons.local_shipping_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SummaryStat(
+                  label: 'Delivered',
+                  value: '${summary.completion.delivered}',
+                  color: AppColors.success,
+                  icon: Icons.task_alt,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SummaryStat(
+                  label: 'Failed',
+                  value: '${summary.completion.failed}',
+                  color: AppColors.error,
+                  icon: Icons.cancel_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryStat(
+                  label: 'COD Due',
+                  value: summary.payments.codToCollect.amount.compactCurrency,
+                  color: AppColors.warning,
+                  icon: Icons.payments_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SummaryStat(
+                  label: 'COD Done',
+                  value: summary.payments.codCollected.amount.compactCurrency,
+                  color: AppColors.success,
+                  icon: Icons.price_check_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SummaryStat(
+                  label: 'Credit',
+                  value:
+                      summary.payments.creditDelivered.amount.compactCurrency,
+                  color: AppColors.info,
+                  icon: Icons.credit_card,
+                ),
+              ),
+            ],
+          ),
+          if (summary.failedReasons.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            ...summary.failedReasons.entries.map((entry) {
+              final label = FailureReason.displayNames[entry.key] ??
+                  entry.key.toLowerCase().replaceAll('_', ' ').capitalizeWords;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.report_problem_outlined,
+                        size: 16, color: AppColors.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
+                      ),
+                    ),
+                    Text(
+                      '${entry.value}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class SummaryCustomerLists extends StatelessWidget {
+  final MobileDeliverySummary summary;
+
+  const SummaryCustomerLists({super.key, required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    if (summary.codCustomers.isEmpty && summary.creditCustomers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return _DashboardCard(
+      title: 'Customer Payments',
+      icon: Icons.people_outline,
+      child: Column(
+        children: [
+          if (summary.codCustomers.isNotEmpty)
+            _CustomerGroup(
+              title: 'COD Customers',
+              color: AppColors.warning,
+              customers: summary.codCustomers,
+            ),
+          if (summary.codCustomers.isNotEmpty &&
+              summary.creditCustomers.isNotEmpty)
+            const Divider(height: 24),
+          if (summary.creditCustomers.isNotEmpty)
+            _CustomerGroup(
+              title: 'Credit Customers',
+              color: AppColors.info,
+              customers: summary.creditCustomers,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+
+  const _SummaryStat({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 86),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withAlpha(16),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style:
+                const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomerGroup extends StatelessWidget {
+  final String title;
+  final Color color;
+  final List<SummaryCustomer> customers;
+
+  const _CustomerGroup({
+    required this.title,
+    required this.color,
+    required this.customers,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleCustomers = customers.take(5).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.person_pin_circle_outlined, size: 18, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ),
+            Text(
+              '${customers.length}',
+              style:
+                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...visibleCustomers
+            .map((customer) => _CustomerPaymentRow(customer: customer)),
+        if (customers.length > visibleCustomers.length)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '+${customers.length - visibleCustomers.length} more',
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CustomerPaymentRow extends StatelessWidget {
+  final SummaryCustomer customer;
+
+  const _CustomerPaymentRow({required this.customer});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = customer.customerName.isNotEmpty
+        ? customer.customerName
+        : customer.orderNumber;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  customer.customerMobile.isNotEmpty
+                      ? customer.customerMobile
+                      : customer.orderNumber,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            customer.amount.compactCurrency,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -830,7 +1149,8 @@ class RatingCard extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.star, color: AppColors.warning, size: 28),
+                        const Icon(Icons.star,
+                            color: AppColors.warning, size: 28),
                         const SizedBox(width: 4),
                         Text(
                           rating.averageRating.toStringAsFixed(1),
@@ -857,11 +1177,26 @@ class RatingCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _RatingBar(stars: 5, count: rating.fiveStar, total: rating.totalReviews),
-                    _RatingBar(stars: 4, count: rating.fourStar, total: rating.totalReviews),
-                    _RatingBar(stars: 3, count: rating.threeStar, total: rating.totalReviews),
-                    _RatingBar(stars: 2, count: rating.twoStar, total: rating.totalReviews),
-                    _RatingBar(stars: 1, count: rating.oneStar, total: rating.totalReviews),
+                    _RatingBar(
+                        stars: 5,
+                        count: rating.fiveStar,
+                        total: rating.totalReviews),
+                    _RatingBar(
+                        stars: 4,
+                        count: rating.fourStar,
+                        total: rating.totalReviews),
+                    _RatingBar(
+                        stars: 3,
+                        count: rating.threeStar,
+                        total: rating.totalReviews),
+                    _RatingBar(
+                        stars: 2,
+                        count: rating.twoStar,
+                        total: rating.totalReviews),
+                    _RatingBar(
+                        stars: 1,
+                        count: rating.oneStar,
+                        total: rating.totalReviews),
                   ],
                 ),
               ),
@@ -893,7 +1228,8 @@ class _RatingBar extends StatelessWidget {
         children: [
           Text(
             '$stars',
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 11, color: AppColors.textSecondary),
           ),
           const SizedBox(width: 4),
           const Icon(Icons.star, size: 10, color: AppColors.warning),
@@ -914,7 +1250,8 @@ class _RatingBar extends StatelessWidget {
             width: 24,
             child: Text(
               '$count',
-              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+              style:
+                  const TextStyle(fontSize: 11, color: AppColors.textTertiary),
               textAlign: TextAlign.right,
             ),
           ),

@@ -46,7 +46,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 });
               }
             },
-            child: const Text('Logout', style: TextStyle(color: AppColors.error)),
+            child:
+                const Text('Logout', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -88,9 +89,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               width: 100,
                               height: 100,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 3),
+                                border:
+                                    Border.all(color: Colors.white, width: 3),
                               ),
                               child: profile?.profilePhoto != null
                                   ? ClipOval(
@@ -116,15 +118,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ),
                             const SizedBox(height: 4),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
                                 profile?.agentCode ?? '',
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                   fontSize: 14,
                                 ),
                               ),
@@ -132,10 +135,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(height: 16),
                             // Status Badge
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
-                                color: profile?.status.agentStatusColor.withOpacity(0.2) ??
-                                    Colors.white.withOpacity(0.2),
+                                color: profile?.status.agentStatusColor
+                                        .withValues(alpha: 0.2) ??
+                                    Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -145,13 +150,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     width: 10,
                                     height: 10,
                                     decoration: BoxDecoration(
-                                      color: profile?.status.agentStatusColor ?? Colors.grey,
+                                      color: profile?.status.agentStatusColor ??
+                                          Colors.grey,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    profile?.status.agentStatusDisplayName ?? 'Offline',
+                                    profile?.status.agentStatusDisplayName ??
+                                        'Offline',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
@@ -176,7 +183,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         Expanded(
                           child: _StatCard(
                             icon: Icons.star_rounded,
-                            value: profile?.averageRating.toStringAsFixed(1) ?? '0.0',
+                            value: profile?.averageRating.toStringAsFixed(1) ??
+                                '0.0',
                             label: 'Rating',
                             color: AppColors.warning,
                           ),
@@ -194,7 +202,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         Expanded(
                           child: _StatCard(
                             icon: Icons.check_circle_rounded,
-                            value: '${profile?.successRate.toStringAsFixed(0) ?? 0}%',
+                            value:
+                                '${profile?.successRate.toStringAsFixed(0) ?? 0}%',
                             label: 'Success',
                             color: AppColors.success,
                           ),
@@ -221,7 +230,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _MenuItem(
                             icon: Icons.two_wheeler_outlined,
                             title: 'Vehicle Information',
-                            subtitle: '${profile?.vehicleType ?? 'Bike'} - ${profile?.vehicleNumber ?? ''}',
+                            subtitle:
+                                '${profile?.vehicleType ?? 'Bike'} - ${profile?.vehicleNumber ?? ''}',
                             onTap: () => context.push('/profile/edit'),
                           ),
                           const Divider(height: 1),
@@ -372,7 +382,8 @@ class _MenuItem extends StatelessWidget {
       subtitle: subtitle != null
           ? Text(
               subtitle!,
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style:
+                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
             )
           : null,
       trailing: Icon(

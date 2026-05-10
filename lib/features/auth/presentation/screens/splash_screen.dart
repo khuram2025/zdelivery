@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +18,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;
+  Timer? _authTimer;
 
   @override
   void initState() {
@@ -34,16 +37,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
 
     _controller.forward();
-    _checkAuth();
+    _authTimer = Timer(const Duration(seconds: 2), _checkAuth);
   }
 
   Future<void> _checkAuth() async {
-    await Future.delayed(const Duration(seconds: 2));
     try {
       await ref.read(authStateProvider.notifier).checkAuthStatus();
-    } catch (e) {
+    } catch (_) {
       // If auth check fails, proceed to login
-      debugPrint('Auth check failed: $e');
     }
     if (mounted) {
       final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
@@ -57,6 +58,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   void dispose() {
+    _authTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -79,7 +81,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -102,7 +104,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       'Delivery Agent App',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                       ),
                     ),
                   ],

@@ -86,7 +86,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Registration successful! Your account is pending verification.'),
+            content: Text(
+                'Registration successful! Your account is pending verification.'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -288,7 +289,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Password *',
-                      hintText: 'Min 8 chars with uppercase, lowercase & number',
+                      hintText:
+                          'Min 8 chars with uppercase, lowercase & number',
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -346,14 +348,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                        border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline, color: AppColors.error),
+                          const Icon(Icons.error_outline,
+                              color: AppColors.error),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(

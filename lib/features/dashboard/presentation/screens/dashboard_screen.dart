@@ -97,15 +97,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (dashboardState.error != null && dashboardState.data == null)
+            else if (dashboardState.error != null &&
+                dashboardState.data == null)
               SliverFillRemaining(
                 child: _ErrorState(
                   error: dashboardState.error!,
-                  onRetry: () => ref.read(dashboardProvider.notifier).loadDashboard(),
+                  onRetry: () =>
+                      ref.read(dashboardProvider.notifier).loadDashboard(),
                 ),
               )
             else if (dashboardState.data != null)
-              _DashboardContent(data: dashboardState.data!)
+              _DashboardContent(
+                data: dashboardState.data!,
+                summary: dashboardState.summary,
+              )
             else
               const SliverFillRemaining(
                 child: Center(child: Text('No data available')),
@@ -174,7 +179,8 @@ class _DashboardAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = profile?.status == 'AVAILABLE' || profile?.status == 'BUSY';
+    final isOnline =
+        profile?.status == 'AVAILABLE' || profile?.status == 'BUSY';
 
     return SliverAppBar(
       expandedHeight: 140,
@@ -205,7 +211,8 @@ class _DashboardAppBar extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.white.withAlpha(50),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withAlpha(100), width: 2),
+                          border: Border.all(
+                              color: Colors.white.withAlpha(100), width: 2),
                         ),
                         child: profile?.profilePhoto != null
                             ? ClipOval(
@@ -219,7 +226,8 @@ class _DashboardAppBar extends StatelessWidget {
                                   ),
                                 ),
                               )
-                            : const Icon(Icons.person, color: Colors.white70, size: 28),
+                            : const Icon(Icons.person,
+                                color: Colors.white70, size: 28),
                       ),
                       const SizedBox(width: 14),
                       // Name & Code
@@ -249,9 +257,12 @@ class _DashboardAppBar extends StatelessWidget {
                       GestureDetector(
                         onTap: onStatusTap,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: isOnline ? AppColors.success : Colors.white.withAlpha(50),
+                            color: isOnline
+                                ? AppColors.success
+                                : Colors.white.withAlpha(50),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -261,7 +272,8 @@ class _DashboardAppBar extends StatelessWidget {
                                 width: 8,
                                 height: 8,
                                 decoration: BoxDecoration(
-                                  color: isOnline ? Colors.white : Colors.white70,
+                                  color:
+                                      isOnline ? Colors.white : Colors.white70,
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -408,8 +420,12 @@ class _FilterChip extends StatelessWidget {
 // Dashboard Content
 class _DashboardContent extends StatelessWidget {
   final DashboardData data;
+  final MobileDeliverySummary? summary;
 
-  const _DashboardContent({required this.data});
+  const _DashboardContent({
+    required this.data,
+    this.summary,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -420,6 +436,13 @@ class _DashboardContent extends StatelessWidget {
           // Today's Quick Stats
           TodayStatsCard(snapshot: data.todaySnapshot),
           const SizedBox(height: 16),
+
+          if (summary != null) ...[
+            MobileSummaryCard(summary: summary!),
+            const SizedBox(height: 16),
+            SummaryCustomerLists(summary: summary!),
+            const SizedBox(height: 16),
+          ],
 
           // Delivery Stats
           DeliveryStatsCard(stats: data.deliveryStats),
@@ -465,7 +488,8 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               error,
-              style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+              style:
+                  const TextStyle(fontSize: 16, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -621,8 +645,7 @@ class _StatusOption extends StatelessWidget {
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(Icons.check_circle, color: color, size: 24),
+            if (isSelected) Icon(Icons.check_circle, color: color, size: 24),
           ],
         ),
       ),

@@ -10,7 +10,11 @@ class SessionManager {
   factory SessionManager() => _instance;
   SessionManager._internal();
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+  );
 
   // Stream controller for session expired events
   final _sessionExpiredController = StreamController<String>.broadcast();

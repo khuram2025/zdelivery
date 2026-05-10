@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,22 +20,93 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  String? _localError;
+  Timer? _timeoutTimer;
+  int _timeoutSeconds = 0;
+  bool _showSlowWarning = false;
 
   @override
   void dispose() {
     _mobileController.dispose();
     _passwordController.dispose();
+    _timeoutTimer?.cancel();
     super.dispose();
+  }
+
+  void _startTimeoutTimer() {
+    _timeoutSeconds = 0;
+    _showSlowWarning = false;
+    _timeoutTimer?.cancel();
+    _timeoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _timeoutSeconds++;
+      if (_timeoutSeconds == 10) {
+        setState(() => _showSlowWarning = true);
+      }
+      if (_timeoutSeconds >= 30) {
+        timer.cancel();
+        // Force stop loading after 30s
+        ref.read(authStateProvider.notifier).clearError();
+        setState(() {
+          _localError = 'Connection timed out. Please check:\n'
+              '- Your internet connection is working\n'
+              '- Try switching between WiFi and Mobile Data\n'
+              '- Restart the app and try again';
+          _showSlowWarning = false;
+        });
+      }
+    });
+  }
+
+  void _stopTimeoutTimer() {
+    _timeoutTimer?.cancel();
+    _showSlowWarning = false;
   }
 
   Future<void> _login() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final success = await ref.read(authStateProvider.notifier).login(
-            _mobileController.text.trim(),
-            _passwordController.text,
-          );
-      if (success && mounted) {
-        context.go('/home');
+      setState(() {
+        _localError = null;
+        _showSlowWarning = false;
+      });
+
+      _startTimeoutTimer();
+
+      try {
+        final success = await ref.read(authStateProvider.notifier).login(
+              _mobileController.text.trim(),
+              _passwordController.text,
+            );
+
+        _stopTimeoutTimer();
+
+        if (success && mounted) {
+          context.go('/home');
+        }
+      } on SocketException catch (_) {
+        _stopTimeoutTimer();
+        if (mounted) {
+          setState(() {
+            _localError = 'Cannot reach server. Please check your internet connection.';
+          });
+        }
+      } on TimeoutException catch (_) {
+        _stopTimeoutTimer();
+        if (mounted) {
+          setState(() {
+            _localError = 'Server is not responding. Please try again later.';
+          });
+        }
+      } catch (e) {
+        _stopTimeoutTimer();
+        if (mounted) {
+          setState(() {
+            _localError = 'Unexpected error: ${e.runtimeType}\nPlease screenshot this and report.';
+          });
+        }
       }
     }
   }
@@ -41,6 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
+    final displayError = _localError ?? authState.error;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -59,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -165,24 +239,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Error Message
-                  if (authState.error != null)
+                  // Slow connection warning
+                  if (_showSlowWarning && authState.isLoading)
                     Container(
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.warning.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.wifi_find, color: AppColors.warning),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Taking longer than usual...\nPlease check your internet connection.',
+                              style: TextStyle(color: AppColors.warning, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Error Message
+                  if (displayError != null && !authState.isLoading)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(Icons.error_outline, color: AppColors.error),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              authState.error!,
-                              style: const TextStyle(color: AppColors.error),
+                              displayError,
+                              style: const TextStyle(color: AppColors.error, fontSize: 13),
                             ),
                           ),
                         ],
@@ -192,7 +291,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // Login Button
                   CustomButton(
                     text: 'Sign In',
-                    onPressed: _login,
+                    onPressed: authState.isLoading ? null : _login,
                     isLoading: authState.isLoading,
                   ),
 

@@ -44,7 +44,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final currentIndex = _getCurrentIndex(context);
     final connectivityState = ref.watch(connectivityProvider);
-    final isOffline = connectivityState.isInitialized && !connectivityState.isConnected;
+    final isOffline =
+        connectivityState.isInitialized && !connectivityState.isConnected;
 
     return Scaffold(
       body: Column(
@@ -60,7 +61,8 @@ class _MainShellState extends ConsumerState<MainShell> {
                     child: SafeArea(
                       bottom: false,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 16),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -105,7 +107,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           color: AppColors.surface,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -178,7 +180,9 @@ class _NavItem extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          color: isActive
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(

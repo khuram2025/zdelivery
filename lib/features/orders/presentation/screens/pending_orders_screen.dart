@@ -10,7 +10,8 @@ class PendingOrdersScreen extends ConsumerStatefulWidget {
   const PendingOrdersScreen({super.key});
 
   @override
-  ConsumerState<PendingOrdersScreen> createState() => _PendingOrdersScreenState();
+  ConsumerState<PendingOrdersScreen> createState() =>
+      _PendingOrdersScreenState();
 }
 
 class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
@@ -93,7 +94,9 @@ class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
                 )
               : RefreshIndicator(
                   onRefresh: () async {
-                    await ref.read(pendingOrdersProvider.notifier).loadPendingOrders();
+                    await ref
+                        .read(pendingOrdersProvider.notifier)
+                        .loadPendingOrders();
                   },
                   child: ListView.builder(
                     padding: const EdgeInsets.only(top: 8, bottom: 24),
@@ -105,18 +108,20 @@ class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
                         showActions: true,
                         onTap: () => context.push('/orders/${order.id}'),
                         onAccept: () async {
-                          final notifier = ref.read(orderDetailProvider(order.id).notifier);
+                          final notifier =
+                              ref.read(orderDetailProvider(order.id).notifier);
                           final success = await notifier.acceptOrder();
                           if (success) {
-                            ref.read(pendingOrdersProvider.notifier).removeOrder(order.id);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Order accepted successfully'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
-                            }
+                            ref
+                                .read(pendingOrdersProvider.notifier)
+                                .removeOrder(order.id);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Order accepted successfully'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
                           }
                         },
                         onReject: () => _showRejectDialog(order.id),
@@ -161,7 +166,8 @@ class _RejectOrderSheetState extends ConsumerState<_RejectOrderSheet> {
 
     setState(() => _isLoading = true);
 
-    final reason = _selectedReason == 'Other' ? _notesController.text : _selectedReason!;
+    final reason =
+        _selectedReason == 'Other' ? _notesController.text : _selectedReason!;
     final notifier = ref.read(orderDetailProvider(widget.orderId).notifier);
     final success = await notifier.rejectOrder(reason);
 
@@ -267,7 +273,8 @@ class _RejectOrderSheetState extends ConsumerState<_RejectOrderSheet> {
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(Colors.white),
+                                valueColor:
+                                    AlwaysStoppedAnimation(Colors.white),
                               ),
                             )
                           : const Text('Reject Order'),

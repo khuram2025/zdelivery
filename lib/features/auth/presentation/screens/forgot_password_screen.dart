@@ -12,7 +12,8 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
@@ -58,7 +59,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _requestOtp() async {
     if (_formKey.currentState?.validate() ?? false) {
       _mobileNumber = _mobileController.text.trim();
-      final response = await ref.read(authStateProvider.notifier).forgotPassword(_mobileNumber);
+      final response = await ref
+          .read(authStateProvider.notifier)
+          .forgotPassword(_mobileNumber);
 
       if (response != null && mounted) {
         setState(() {
@@ -164,14 +167,16 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                        border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline, color: AppColors.error),
+                          const Icon(Icons.error_outline,
+                              color: AppColors.error),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -199,14 +204,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                               await ref
                                   .read(authStateProvider.notifier)
                                   .forgotPassword(_mobileNumber);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('OTP resent successfully'),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('OTP resent successfully'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
                             },
                       child: const Text('Resend OTP'),
                     ),
@@ -229,7 +233,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             height: 2,
             color: _currentStep.index >= 1
                 ? AppColors.primary
-                : AppColors.textTertiary.withOpacity(0.3),
+                : AppColors.textTertiary.withValues(alpha: 0.3),
           ),
         ),
         _buildProgressStep(2, 'Verify', _currentStep.index >= 1),
@@ -238,7 +242,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             height: 2,
             color: _currentStep.index >= 2
                 ? AppColors.primary
-                : AppColors.textTertiary.withOpacity(0.3),
+                : AppColors.textTertiary.withValues(alpha: 0.3),
           ),
         ),
         _buildProgressStep(3, 'Reset', _currentStep.index >= 2),
@@ -253,7 +257,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: isActive ? AppColors.primary : AppColors.textTertiary.withOpacity(0.3),
+            color: isActive
+                ? AppColors.primary
+                : AppColors.textTertiary.withValues(alpha: 0.3),
             shape: BoxShape.circle,
           ),
           child: Center(

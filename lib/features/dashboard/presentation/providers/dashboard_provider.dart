@@ -8,6 +8,7 @@ enum DashboardPeriodFilter { today, yesterday, week, month, all, custom }
 class DashboardState {
   final bool isLoading;
   final DashboardData? data;
+  final MobileDeliverySummary? summary;
   final DashboardPeriodFilter filter;
   final DateTime? customStartDate;
   final DateTime? customEndDate;
@@ -16,6 +17,7 @@ class DashboardState {
   DashboardState({
     this.isLoading = false,
     this.data,
+    this.summary,
     this.filter = DashboardPeriodFilter.today,
     this.customStartDate,
     this.customEndDate,
@@ -25,6 +27,7 @@ class DashboardState {
   DashboardState copyWith({
     bool? isLoading,
     DashboardData? data,
+    MobileDeliverySummary? summary,
     DashboardPeriodFilter? filter,
     DateTime? customStartDate,
     DateTime? customEndDate,
@@ -33,6 +36,7 @@ class DashboardState {
     return DashboardState(
       isLoading: isLoading ?? this.isLoading,
       data: data ?? this.data,
+      summary: summary ?? this.summary,
       filter: filter ?? this.filter,
       customStartDate: customStartDate ?? this.customStartDate,
       customEndDate: customEndDate ?? this.customEndDate,
@@ -41,7 +45,8 @@ class DashboardState {
   }
 }
 
-final dashboardProvider = StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
+final dashboardProvider =
+    StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
   return DashboardNotifier(ref.read(deliveryServiceProvider));
 });
 
@@ -91,8 +96,10 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
         startDate: startDate,
         endDate: endDate,
       );
+      final summary =
+          await _loadSummaryForFilter(newFilter, startDate, endDate);
 
-      state = state.copyWith(isLoading: false, data: data);
+      state = state.copyWith(isLoading: false, data: data, summary: summary);
     } on DioException catch (e) {
       String errorMessage = 'Failed to load dashboard';
       if (e.type == DioExceptionType.connectionError) {
@@ -102,7 +109,8 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
       }
       state = state.copyWith(isLoading: false, error: errorMessage);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to load dashboard');
+      state =
+          state.copyWith(isLoading: false, error: 'Failed to load dashboard');
     }
   }
 
@@ -116,5 +124,38 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
       customEndDate: end,
     );
     loadDashboard(filter: DashboardPeriodFilter.custom);
+  }
+
+  Future<MobileDeliverySummary> _loadSummaryForFilter(
+    DashboardPeriodFilter filter,
+    String? startDate,
+    String? endDate,
+  ) {
+    switch (filter) {
+      case DashboardPeriodFilter.today:
+        return _deliveryService.getMobileSummary(date: 'today');
+      case DashboardPeriodFilter.yesterday:
+        final yesterday = DateTime.now().subtract(const Duration(days: 1));
+        return _deliveryService.getMobileSummary(date: _formatDate(yesterday));
+      case DashboardPeriodFilter.week:
+        final now = DateTime.now();
+        return _deliveryService.getMobileSummary(
+          startDate: _formatDate(now.subtract(const Duration(days: 7))),
+          endDate: _formatDate(now),
+        );
+      case DashboardPeriodFilter.month:
+        final now = DateTime.now();
+        return _deliveryService.getMobileSummary(
+          startDate: _formatDate(DateTime(now.year, now.month - 1, now.day)),
+          endDate: _formatDate(now),
+        );
+      case DashboardPeriodFilter.custom:
+        return _deliveryService.getMobileSummary(
+          startDate: startDate,
+          endDate: endDate,
+        );
+      case DashboardPeriodFilter.all:
+        return _deliveryService.getMobileSummary();
+    }
   }
 }

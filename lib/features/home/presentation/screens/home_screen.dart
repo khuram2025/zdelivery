@@ -56,7 +56,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 });
               }
             },
-            child: const Text('Logout', style: TextStyle(color: AppColors.error)),
+            child:
+                const Text('Logout', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -122,9 +123,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     value: 'logout',
                                     child: Row(
                                       children: [
-                                        Icon(Icons.logout, color: AppColors.error),
+                                        Icon(Icons.logout,
+                                            color: AppColors.error),
                                         SizedBox(width: 8),
-                                        Text('Logout', style: TextStyle(color: AppColors.error)),
+                                        Text('Logout',
+                                            style: TextStyle(
+                                                color: AppColors.error)),
                                       ],
                                     ),
                                   ),
@@ -133,10 +137,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   width: 56,
                                   height: 56,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: Colors.white.withOpacity(0.3),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.3),
                                       width: 2,
                                     ),
                                   ),
@@ -171,7 +176,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     Text(
                                       profile?.agentCode ?? '',
                                       style: TextStyle(
-                                        color: Colors.white.withOpacity(0.8),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.8),
                                         fontSize: 14,
                                       ),
                                     ),
@@ -182,7 +188,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               _StatusToggle(
                                 status: profile?.status ?? AgentStatus.offline,
                                 onChanged: (newStatus) async {
-                                  await ref.read(profileProvider.notifier).updateStatus(newStatus);
+                                  await ref
+                                      .read(profileProvider.notifier)
+                                      .updateStatus(newStatus);
                                 },
                               ),
                             ],
@@ -193,7 +201,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             children: [
                               _StatItem(
                                 icon: Icons.star_rounded,
-                                value: profile?.averageRating.toStringAsFixed(1) ?? '0.0',
+                                value:
+                                    profile?.averageRating.toStringAsFixed(1) ??
+                                        '0.0',
                                 label: 'Rating',
                               ),
                               const SizedBox(width: 24),
@@ -205,7 +215,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               const SizedBox(width: 24),
                               _StatItem(
                                 icon: Icons.account_balance_wallet_rounded,
-                                value: profile?.earningsBalance.currency ?? 'Rs 0',
+                                value:
+                                    profile?.earningsBalance.currency ?? 'Rs 0',
                                 label: 'Balance',
                               ),
                             ],
@@ -326,7 +337,8 @@ class _StatusToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = status == AgentStatus.available || status == AgentStatus.busy;
+    final isOnline =
+        status == AgentStatus.available || status == AgentStatus.busy;
 
     return GestureDetector(
       onTap: () {
@@ -335,7 +347,9 @@ class _StatusToggle extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isOnline ? AppColors.success : Colors.white.withOpacity(0.2),
+          color: isOnline
+              ? AppColors.success
+              : Colors.white.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -353,7 +367,9 @@ class _StatusToggle extends StatelessWidget {
             Text(
               isOnline ? 'Online' : 'Offline',
               style: TextStyle(
-                color: isOnline ? Colors.white : Colors.white.withOpacity(0.7),
+                color: isOnline
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.7),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -380,7 +396,7 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: Colors.white.withOpacity(0.8), size: 20),
+        Icon(icon, color: Colors.white.withValues(alpha: 0.8), size: 20),
         const SizedBox(width: 8),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,7 +412,7 @@ class _StatItem extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 12,
               ),
             ),
@@ -435,7 +451,7 @@ class _QuickActionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 24),

@@ -28,7 +28,11 @@ class AuthException implements Exception {
 
 class ApiService {
   late final Dio _dio;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+  );
   final SessionManager _sessionManager = SessionManager();
 
   ApiService() {
@@ -47,9 +51,18 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _storage.read(key: AppConstants.accessTokenKey);
-          if (token != null) {
-            options.headers['Authorization'] = 'Bearer $token';
+          // Skip token for auth endpoints - they don't need it
+          if (!_isAuthEndpoint(options.path)) {
+            try {
+              final token = await _storage
+                  .read(key: AppConstants.accessTokenKey)
+                  .timeout(const Duration(seconds: 5));
+              if (token != null) {
+                options.headers['Authorization'] = 'Bearer $token';
+              }
+            } catch (_) {
+              // Storage read failed or timed out - proceed without token
+            }
           }
           return handler.next(options);
         },
@@ -68,8 +81,9 @@ class ApiService {
             );
           }
 
-          // Handle 401 Unauthorized
-          if (error.response?.statusCode == 401) {
+          // Handle 401 Unauthorized - skip for auth endpoints
+          if (error.response?.statusCode == 401 &&
+              !_isAuthEndpoint(error.requestOptions.path)) {
             final refreshed = await _refreshToken();
             if (refreshed) {
               // Retry the request with new token
@@ -94,6 +108,18 @@ class ApiService {
     );
   }
 
+  bool _isAuthEndpoint(String path) {
+    const authPaths = [
+      ApiConstants.login,
+      ApiConstants.register,
+      ApiConstants.refreshToken,
+      ApiConstants.forgotPassword,
+      ApiConstants.verifyOtp,
+      ApiConstants.resetPassword,
+    ];
+    return authPaths.any((authPath) => path.contains(authPath));
+  }
+
   bool _isNetworkError(DioException error) {
     return error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
@@ -104,7 +130,8 @@ class ApiService {
 
   Future<bool> _refreshToken() async {
     try {
-      final refreshToken = await _storage.read(key: AppConstants.refreshTokenKey);
+      final refreshToken =
+          await _storage.read(key: AppConstants.refreshTokenKey);
       if (refreshToken == null) return false;
 
       final response = await Dio().post(
@@ -119,9 +146,11 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final newAccessToken = response.data['data']?['access'] ?? response.data['access'];
+        final newAccessToken =
+            response.data['data']?['access'] ?? response.data['access'];
         if (newAccessToken != null) {
-          await _storage.write(key: AppConstants.accessTokenKey, value: newAccessToken);
+          await _storage.write(
+              key: AppConstants.accessTokenKey, value: newAccessToken);
           return true;
         }
       }
@@ -149,7 +178,8 @@ class ApiService {
   }
 
   // GET request
-  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
+  Future<Response> get(String path,
+      {Map<String, dynamic>? queryParameters}) async {
     return await _dio.get(path, queryParameters: queryParameters);
   }
 
@@ -183,7 +213,8 @@ class ApiService {
       formData.files.add(
         MapEntry(
           fileField,
-          await MultipartFile.fromFile(file.path, filename: file.path.split('/').last),
+          await MultipartFile.fromFile(file.path,
+              filename: file.path.split('/').last),
         ),
       );
     }
@@ -192,16 +223,13 @@ class ApiService {
       formData.files.add(
         MapEntry(
           'signature_image',
-          await MultipartFile.fromFile(signatureFile.path, filename: 'signature.png'),
+          await MultipartFile.fromFile(signatureFile.path,
+              filename: 'signature.png'),
         ),
       );
     }
 
-    return await _dio.post(
-      path,
-      data: formData,
-      options: Options(contentType: 'multipart/form-data'),
-    );
+    return await _dio.post(path, data: formData);
   }
 
   // PATCH with multipart
@@ -223,16 +251,13 @@ class ApiService {
       formData.files.add(
         MapEntry(
           fileField,
-          await MultipartFile.fromFile(file.path, filename: file.path.split('/').last),
+          await MultipartFile.fromFile(file.path,
+              filename: file.path.split('/').last),
         ),
       );
     }
 
-    return await _dio.patch(
-      path,
-      data: formData,
-      options: Options(contentType: 'multipart/form-data'),
-    );
+    return await _dio.patch(path, data: formData);
   }
 
   /// Helper to check if error is a network error

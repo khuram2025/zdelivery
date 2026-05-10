@@ -110,15 +110,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
     } on DioException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: _authService.parseErrorResponse(e),
-      );
+      String errorMsg;
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        errorMsg = 'Connection timed out. Server may be unreachable.';
+      } else if (e.type == DioExceptionType.receiveTimeout) {
+        errorMsg = 'Server took too long to respond. Please try again.';
+      } else if (e.type == DioExceptionType.connectionError) {
+        errorMsg = 'Cannot connect to server. Check your internet connection.';
+      } else if (e.response?.statusCode == 401) {
+        errorMsg = 'Invalid mobile number or password.';
+      } else if (e.response?.statusCode == 403) {
+        errorMsg = 'Account is disabled. Please contact support.';
+      } else if (e.response?.statusCode != null && e.response!.statusCode! >= 500) {
+        errorMsg = 'Server error (${e.response!.statusCode}). Please try again later.';
+      } else {
+        errorMsg = _authService.parseErrorResponse(e);
+      }
+      state = state.copyWith(isLoading: false, error: errorMsg);
       return false;
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: 'Error: ${e.runtimeType} - Please screenshot and report this.',
       );
       return false;
     }
