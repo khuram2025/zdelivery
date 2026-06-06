@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../core/constants/api_constants.dart';
+import '../features/customers/data/models.dart';
 import '../features/dashboard/data/models.dart';
 import '../features/orders/data/models.dart';
 import '../features/profile/data/models.dart';
@@ -126,6 +127,55 @@ class DeliveryService {
   Future<DeliveryOrderDetail> getOrderDetail(int id) async {
     final response = await _apiService.get(ApiConstants.orderDetail(id));
     return DeliveryOrderDetail.fromJson(response.data['data']);
+  }
+
+  Future<AssignedCustomersData> getAssignedCustomers({
+    String? search,
+    String? paymentType,
+  }) async {
+    try {
+      final response = await _apiService.get(
+        ApiConstants.assignedCustomers,
+        queryParameters: {
+          if (search != null) 'search': search,
+          if (paymentType != null) 'payment_type': paymentType,
+        },
+      );
+      return AssignedCustomersData.fromJson(response.data);
+    } on DioException catch (e) {
+      if (!_canUseCustomerFallback(e)) rethrow;
+      final fallback = await _getAssignedCustomersFromOrders();
+      return _filterAssignedCustomersFallback(
+        fallback,
+        search: search,
+        paymentType: paymentType,
+      );
+    }
+  }
+
+  Future<CustomerDeliveryDetail> getAssignedCustomerDetail(
+    int id, {
+    AssignedCustomer? initialCustomer,
+  }) async {
+    try {
+      final response =
+          await _apiService.get(ApiConstants.assignedCustomerDetail(id));
+      return CustomerDeliveryDetail.fromJson(response.data);
+    } on DioException catch (e) {
+      if (!_canUseCustomerFallback(e)) rethrow;
+      final orders = await _getAssignedOrderSnapshot();
+      var customer = initialCustomer;
+      if (customer == null) {
+        for (final item in AssignedCustomersData.fromOrders(orders).customers) {
+          if (item.id == id) {
+            customer = item;
+            break;
+          }
+        }
+      }
+      if (customer == null) rethrow;
+      return CustomerDeliveryDetail.fromCustomerAndOrders(customer, orders);
+    }
   }
 
   Future<Map<String, dynamic>> acceptOrder(int id,
@@ -357,5 +407,62 @@ class DeliveryService {
       },
     );
     return MobileDeliverySummary.fromJson(response.data['data']);
+  }
+
+  bool _canUseCustomerFallback(DioException e) {
+    return e.response?.statusCode == 404 || e.response?.statusCode == 405;
+  }
+
+  Future<AssignedCustomersData> _getAssignedCustomersFromOrders() async {
+    return AssignedCustomersData.fromOrders(await _getAssignedOrderSnapshot());
+  }
+
+  Future<List<DeliveryOrder>> _getAssignedOrderSnapshot() async {
+    final activeData = await getOrders();
+    final activeJson =
+        activeData['active_orders'] ?? activeData['orders'] ?? <dynamic>[];
+    final activeOrders = activeJson is List
+        ? activeJson.map((item) => DeliveryOrder.fromJson(item)).toList()
+        : <DeliveryOrder>[];
+
+    final deliveredOrders = await getOrderHistory(
+      status: 'DELIVERED',
+      all: true,
+      limit: 100,
+    );
+    final failedOrders = await getOrderHistory(
+      status: 'FAILED',
+      all: true,
+      limit: 100,
+    );
+
+    return [...activeOrders, ...deliveredOrders, ...failedOrders];
+  }
+
+  AssignedCustomersData _filterAssignedCustomersFallback(
+    AssignedCustomersData data, {
+    String? search,
+    String? paymentType,
+  }) {
+    var customers = data.customers;
+    final normalizedSearch = search?.trim().toLowerCase();
+    if (normalizedSearch != null && normalizedSearch.isNotEmpty) {
+      customers = customers.where((customer) {
+        return customer.name.toLowerCase().contains(normalizedSearch) ||
+            customer.mobile.toLowerCase().contains(normalizedSearch) ||
+            customer.displayLocation.toLowerCase().contains(normalizedSearch);
+      }).toList();
+    }
+    if (paymentType == 'credit') {
+      customers = customers.where((customer) => customer.hasCredit).toList();
+    } else if (paymentType == 'cod') {
+      customers = customers.where((customer) => customer.hasCod).toList();
+    }
+    return AssignedCustomersData(
+      customers: customers,
+      summary: AssignedCustomersSummary.fromCustomers(customers),
+      total: customers.length,
+      hasNext: false,
+    );
   }
 }

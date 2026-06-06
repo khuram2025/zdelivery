@@ -209,6 +209,8 @@ class _HistoryTab extends ConsumerWidget {
       children: [
         // Filter Bar
         _FilterBar(isCompleted: isCompleted),
+        if (historyState.error != null)
+          _HistoryErrorBanner(message: historyState.error!),
 
         // Orders List
         Expanded(
@@ -259,6 +261,11 @@ class _FilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyState = ref.watch(orderHistoryProvider);
     final currentFilter = historyState.filter;
+    final customLabel = historyState.startDate != null &&
+            historyState.endDate != null &&
+            currentFilter == HistoryFilter.custom
+        ? '${DateFormat('dd MMM').format(historyState.startDate!)} - ${DateFormat('dd MMM').format(historyState.endDate!)}'
+        : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -311,7 +318,10 @@ class _FilterBar extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _DateRangeButton(currentFilter: currentFilter),
+          _DateRangeButton(
+            currentFilter: currentFilter,
+            label: customLabel,
+          ),
         ],
       ),
     );
@@ -354,27 +364,44 @@ class _FilterChip extends StatelessWidget {
 
 class _DateRangeButton extends ConsumerWidget {
   final HistoryFilter currentFilter;
+  final String? label;
 
-  const _DateRangeButton({required this.currentFilter});
+  const _DateRangeButton({required this.currentFilter, this.label});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isSelected = currentFilter == HistoryFilter.custom;
     return GestureDetector(
       onTap: () => _showDateRangePicker(context, ref),
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: EdgeInsets.symmetric(
+          horizontal: label == null ? 8 : 10,
+          vertical: 8,
+        ),
         decoration: BoxDecoration(
-          color: currentFilter == HistoryFilter.custom
-              ? AppColors.primary
-              : AppColors.surfaceVariant,
+          color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(
-          Icons.calendar_today_outlined,
-          size: 18,
-          color: currentFilter == HistoryFilter.custom
-              ? Colors.white
-              : AppColors.textSecondary,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 18,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
+            ),
+            if (label != null) ...[
+              const SizedBox(width: 6),
+              Text(
+                label!,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -387,8 +414,9 @@ class _DateRangeButton extends ConsumerWidget {
       firstDate: DateTime(now.year - 1),
       lastDate: now,
       initialDateRange: DateTimeRange(
-        start: now.subtract(const Duration(days: 7)),
-        end: now,
+        start: ref.read(orderHistoryProvider).startDate ??
+            now.subtract(const Duration(days: 7)),
+        end: ref.read(orderHistoryProvider).endDate ?? now,
       ),
       builder: (context, child) {
         return Theme(
@@ -410,6 +438,42 @@ class _DateRangeButton extends ConsumerWidget {
           .read(orderHistoryProvider.notifier)
           .setCustomDateRange(picked.start, picked.end);
     }
+  }
+}
+
+class _HistoryErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _HistoryErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.error,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -441,100 +505,122 @@ class _HistoryOrderCard extends StatelessWidget {
         ? order.deliveredAt
         : order.createdAt;
 
-    return GestureDetector(
-      onTap: () => context.push('/orders/${order.id}'),
+    return Semantics(
+      button: true,
+      label: 'View order ${order.orderNumber ?? order.assignmentNumber}',
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
-        child: Row(
-          children: [
-            // Status Icon
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: (isCompleted ? AppColors.success : AppColors.error)
-                    .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                isCompleted ? Icons.check_circle : Icons.cancel,
-                color: isCompleted ? AppColors.success : AppColors.error,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Order Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => context.push('/orders/${order.id}'),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          order.orderNumber ?? order.assignmentNumber,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        _getAmountText(order),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: isCompleted
-                              ? AppColors.success
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
+                  // Status Icon
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: (isCompleted ? AppColors.success : AppColors.error)
+                          .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isCompleted ? Icons.check_circle : Icons.cancel,
+                      color: isCompleted ? AppColors.success : AppColors.error,
+                      size: 20,
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.person_outline,
-                          size: 14, color: AppColors.textTertiary),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          order.customerName ?? 'Customer',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 12),
+
+                  // Order Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                order.orderNumber ?? order.assignmentNumber,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              _getAmountText(order),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: isCompleted
+                                    ? AppColors.success
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const Icon(Icons.access_time,
-                          size: 14, color: AppColors.textTertiary),
-                      const SizedBox(width: 4),
-                      Text(
-                        dateFormat.format(displayDate),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.person_outline,
+                                size: 14, color: AppColors.textTertiary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                order.customerName ?? 'Customer',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const Icon(Icons.access_time,
+                                size: 14, color: AppColors.textTertiary),
+                            const SizedBox(width: 4),
+                            Text(
+                              dateFormat.format(displayDate),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: () => context.push('/orders/${order.id}'),
+                    tooltip: 'View order details',
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    style: IconButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      backgroundColor:
+                          AppColors.primary.withValues(alpha: 0.08),
+                      fixedSize: const Size(38, 38),
+                      minimumSize: const Size(38, 38),
+                      padding: EdgeInsets.zero,
+                    ),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right,
-                color: AppColors.textTertiary, size: 20),
-          ],
+          ),
         ),
       ),
     );

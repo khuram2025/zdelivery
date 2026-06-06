@@ -1236,6 +1236,114 @@ GET /api/v1/delivery/agents/earnings/
 
 ---
 
+### Agent Assigned Customers
+
+These endpoints power the delivery mobile app customer status view. They must be scoped to the authenticated delivery agent only. Return customers only when they are connected to orders assigned to that agent, including active orders and that agent's own delivery history. Do not return business-wide customers.
+
+#### List Assigned Customers
+
+```
+GET /api/v1/delivery/mobile/customers/
+```
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| search | string | No | Search assigned customers by name, mobile, or location |
+| payment_type | string | No | `credit` or `cod` |
+| page | int | No | Page number |
+| page_size | int | No | Items per page |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "customers": [
+      {
+        "id": 25,
+        "name": "Ahmed Ali",
+        "mobile": "03001234567",
+        "email": "ahmed@example.com",
+        "address": "123 Main Street",
+        "city": "Lahore",
+        "area": "Gulberg",
+        "latitude": 31.5204,
+        "longitude": 74.3587,
+        "assigned_orders": 6,
+        "active_orders": 1,
+        "delivered_orders": 5,
+        "failed_orders": 0,
+        "last_order_number": "HD-20260128-0001",
+        "last_order_at": "2026-01-28T10:30:00Z",
+        "payment_method": "CREDIT",
+        "wallet": {
+          "paid": 12000.0,
+          "remaining": 2500.0,
+          "balance": 2500.0,
+          "credit_limit": 5000.0,
+          "available_credit": 2500.0
+        }
+      }
+    ],
+    "summary": {
+      "total_customers": 1,
+      "credit_customers": 1,
+      "cod_customers": 0,
+      "total_paid": 12000.0,
+      "total_remaining": 2500.0
+    }
+  }
+}
+```
+
+#### Get Assigned Customer Detail
+
+```
+GET /api/v1/delivery/mobile/customers/{customer_id}/
+```
+
+Returns the same customer object plus order history and wallet status. If the customer is not tied to an order assigned to the authenticated delivery agent, return `404` or `403`.
+
+```json
+{
+  "success": true,
+  "data": {
+    "customer": {
+      "id": 25,
+      "name": "Ahmed Ali",
+      "mobile": "03001234567",
+      "address": "123 Main Street",
+      "latitude": 31.5204,
+      "longitude": 74.3587,
+      "wallet": {
+        "paid": 12000.0,
+        "remaining": 2500.0,
+        "balance": 2500.0,
+        "credit_limit": 5000.0,
+        "available_credit": 2500.0
+      }
+    },
+    "order_history": [
+      {
+        "id": 123,
+        "order_number": "HD-20260128-0001",
+        "status": "DELIVERED",
+        "payment_method": "CREDIT",
+        "payment_status": "PENDING",
+        "total": 2500.0,
+        "paid": 0.0,
+        "remaining": 2500.0,
+        "created_at": "2026-01-28T10:30:00Z",
+        "delivered_at": "2026-01-28T11:10:00Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
 ### Agent Orders
 
 #### Get Active Orders

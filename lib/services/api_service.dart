@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants/api_constants.dart';
 import '../core/constants/app_constants.dart';
+import '../core/network/base_url_resolver.dart';
 import '../core/services/session_manager.dart';
 
 /// Custom exception for network errors
@@ -51,6 +52,16 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          // Route to the currently-active endpoint (DNS preferred, IP fallback)
+          // and remember which endpoints this request has tried, so a
+          // connection failure can fail over to the other one. Only seed on the
+          // first attempt — failover retries set these themselves.
+          if (options.extra['triedBaseUrls'] == null) {
+            final activeUrl = BaseUrlResolver.instance.activeUrl;
+            options.baseUrl = activeUrl;
+            options.extra['triedBaseUrls'] = <String>{activeUrl};
+          }
+
           // Skip token for auth endpoints - they don't need it
           if (!_isAuthEndpoint(options.path)) {
             try {
@@ -67,8 +78,23 @@ class ApiService {
           return handler.next(options);
         },
         onError: (error, handler) async {
-          // Handle network errors
+          // Handle network errors (incl. DNS failures): try the other endpoint
+          // before giving up. DNS resolution failures surface here as a
+          // connectionError / SocketException.
           if (_isNetworkError(error)) {
+            try {
+              final failoverResponse = await _tryFailover(error);
+              if (failoverResponse != null) {
+                return handler.resolve(failoverResponse);
+              }
+            } on DioException catch (e) {
+              // Failover reached a real backend that returned an HTTP error
+              // (or an expired session) — propagate it instead of masking it
+              // as "offline".
+              return handler.next(e);
+            }
+
+            // Every endpoint failed → genuinely offline / backend unreachable.
             return handler.reject(
               DioException(
                 requestOptions: error.requestOptions,
@@ -120,6 +146,36 @@ class ApiService {
     return authPaths.any((authPath) => path.contains(authPath));
   }
 
+  /// Retry a failed request against the next untried endpoint (e.g. the direct
+  /// IP when the DNS host can't be resolved). Returns the successful response,
+  /// or `null` when no other endpoint is available or it also failed.
+  Future<Response<dynamic>?> _tryFailover(DioException error) async {
+    final options = error.requestOptions;
+    final tried = (options.extra['triedBaseUrls'] as Set?)?.cast<String>() ??
+        <String>{options.baseUrl};
+
+    final nextUrl = BaseUrlResolver.instance.nextUntried(tried);
+    if (nextUrl == null) return null; // All endpoints exhausted.
+
+    tried.add(nextUrl);
+    options.baseUrl = nextUrl;
+    options.extra['triedBaseUrls'] = tried;
+
+    try {
+      final response = await _dio.fetch(options);
+      // This endpoint works — make it the active one for future requests.
+      BaseUrlResolver.instance.markActive(nextUrl);
+      return response;
+    } on DioException catch (e) {
+      // If the retry also hit a network/DNS failure, every endpoint has now
+      // been tried (the recursive interceptor exhausted them) — report offline.
+      if (_isNetworkError(e)) return null;
+      // Otherwise the retry reached a real backend that returned an error;
+      // let the caller propagate it unchanged.
+      rethrow;
+    }
+  }
+
   bool _isNetworkError(DioException error) {
     return error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
@@ -134,8 +190,10 @@ class ApiService {
           await _storage.read(key: AppConstants.refreshTokenKey);
       if (refreshToken == null) return false;
 
-      final response = await Dio().post(
-        '${ApiConstants.baseUrl}${ApiConstants.refreshToken}',
+      // Use the shared client so the refresh call gets the same DNS→IP
+      // failover (and the active endpoint) as every other request.
+      final response = await _dio.post(
+        ApiConstants.refreshToken,
         data: {'refresh_token': refreshToken},
         options: Options(
           headers: {

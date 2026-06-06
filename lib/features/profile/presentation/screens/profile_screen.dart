@@ -264,7 +264,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _MenuItem(
                             icon: Icons.notifications_outlined,
                             title: 'Notifications',
-                            onTap: () {},
+                            onTap: () => context.push('/notifications'),
                           ),
                           const Divider(height: 1),
                           _MenuItem(

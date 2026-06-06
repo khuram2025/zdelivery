@@ -3,11 +3,15 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/customers/data/models.dart';
+import '../../features/customers/presentation/screens/customer_detail_screen.dart';
+import '../../features/customers/presentation/screens/customers_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/earnings/presentation/screens/earnings_screen.dart';
 import '../../features/earnings/presentation/screens/statistics_screen.dart';
 import '../../features/home/presentation/screens/main_shell.dart';
+import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
 import '../../features/orders/presentation/screens/orders_screen.dart';
 import '../../features/orders/presentation/screens/pending_orders_screen.dart';
@@ -73,6 +77,14 @@ final appRouter = GoRouter(
           ),
         ),
 
+        // Assigned Customers
+        GoRoute(
+          path: '/customers',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: CustomersScreen(),
+          ),
+        ),
+
         // Profile
         GoRoute(
           path: '/profile',
@@ -89,6 +101,12 @@ final appRouter = GoRouter(
       builder: (context, state) => const PendingOrdersScreen(),
     ),
 
+    // Notifications (full screen)
+    GoRoute(
+      path: '/notifications',
+      builder: (context, state) => const NotificationsScreen(),
+    ),
+
     // Order Detail (full screen)
     GoRoute(
       path: '/orders/:id',
@@ -102,6 +120,21 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/statistics',
       builder: (context, state) => const StatisticsScreen(),
+    ),
+
+    // Customer Detail (full screen)
+    GoRoute(
+      path: '/customers/:id',
+      builder: (context, state) {
+        final id = int.parse(state.pathParameters['id']!);
+        final initialCustomer = state.extra is AssignedCustomer
+            ? state.extra as AssignedCustomer
+            : null;
+        return CustomerDetailScreen(
+          customerId: id,
+          initialCustomer: initialCustomer,
+        );
+      },
     ),
   ],
 );

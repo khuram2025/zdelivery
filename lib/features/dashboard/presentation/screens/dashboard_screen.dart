@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../orders/presentation/providers/orders_provider.dart';
 import '../../../profile/presentation/providers/profile_provider.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 import '../../data/models.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/dashboard_widgets.dart';
@@ -166,7 +167,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 // Dashboard App Bar
-class _DashboardAppBar extends StatelessWidget {
+class _DashboardAppBar extends ConsumerWidget {
   final dynamic profile;
   final VoidCallback onStatusTap;
   final VoidCallback onMenuTap;
@@ -178,9 +179,12 @@ class _DashboardAppBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isOnline =
         profile?.status == 'AVAILABLE' || profile?.status == 'BUSY';
+    final unreadCount = ref.watch(
+      notificationsProvider.select((state) => state.unreadCount),
+    );
 
     return SliverAppBar(
       expandedHeight: 140,
@@ -300,9 +304,48 @@ class _DashboardAppBar extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-          onPressed: () {},
+          icon: _NotificationIconBadge(count: unreadCount),
+          onPressed: () => context.push('/notifications'),
         ),
+      ],
+    );
+  }
+}
+
+class _NotificationIconBadge extends StatelessWidget {
+  final int count;
+
+  const _NotificationIconBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_outlined, color: Colors.white),
+        if (count > 0)
+          Positioned(
+            right: -4,
+            top: -5,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  count > 9 ? '9+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

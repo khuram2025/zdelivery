@@ -1,8 +1,17 @@
 class ApiConstants {
-  // Base URL - port 8001 as per auth.md documentation
-  static const String baseUrl = 'http://54.166.200.11:8001/api/v1';
-  // static const String baseUrl = 'http://54.209.158.254:8004/api/v1';
-  // static const String baseUrl = 'https://zayyrah.com/api/v1/';
+  // Primary endpoint (DNS). Preferred whenever it resolves.
+  static const String primaryBaseUrl = 'https://dev.zayyrah.com/api/v1';
+
+  // Secondary endpoint (direct IP). Used only when the DNS host can't be
+  // resolved/reached. Must point at the SAME backend as [primaryBaseUrl].
+  // static const String fallbackBaseUrl = 'http://54.166.200.11:8001/api/v1';
+  static const String fallbackBaseUrl = 'http://54.209.158.254:8004/api/v1';
+
+  /// Endpoints in preference order: DNS first, IP fallback second.
+  static const List<String> baseUrls = [primaryBaseUrl, fallbackBaseUrl];
+
+  /// Backwards-compatible default (the primary/DNS endpoint).
+  static const String baseUrl = primaryBaseUrl;
 
   // Auth endpoints (as per auth.md)
   static const String login = '/delivery/auth/login/';
@@ -27,10 +36,14 @@ class ApiConstants {
   static const String pendingOrders = '/delivery/orders/pending/';
   static const String orderHistory = '/delivery/mobile/history/';
   static const String mobileSummary = '/delivery/mobile/summary/';
+  static const String assignedCustomers = '/delivery/mobile/customers/';
 
   static String orderDetail(int id) => '/delivery/mobile/orders/$id/';
+  static String assignedCustomerDetail(int id) =>
+      '/delivery/mobile/customers/$id/';
   static String orderStatus(int id) => '/delivery/mobile/orders/$id/status/';
-  static String completeOrder(int id) => '/delivery/mobile/orders/$id/complete/';
+  static String completeOrder(int id) =>
+      '/delivery/mobile/orders/$id/complete/';
   static String failOrder(int id) => '/delivery/mobile/orders/$id/fail/';
   static String updateCustomerLocation(int id) =>
       '/delivery/mobile/orders/$id/update-customer-location/';

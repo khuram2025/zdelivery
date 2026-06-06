@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,8 +11,20 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 import '../../data/models.dart';
 import '../providers/orders_provider.dart';
+
+Future<void> _refreshDeliveryWorkflow(WidgetRef ref) async {
+  await Future.wait<void>([
+    ref.read(ordersProvider.notifier).loadOrders(),
+    ref.read(pendingOrdersProvider.notifier).loadPendingOrders(),
+    ref.read(orderHistoryProvider.notifier).loadHistory(),
+    ref.read(dashboardProvider.notifier).loadDashboard(),
+    ref.read(notificationsProvider.notifier).checkNow(silent: true),
+  ]);
+}
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final int orderId;
@@ -25,30 +36,11 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
-  Timer? _autoBackTimer;
-  bool _autoBackScheduled = false;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(orderDetailProvider(widget.orderId).notifier).loadOrderDetail();
-    });
-  }
-
-  @override
-  void dispose() {
-    _autoBackTimer?.cancel();
-    super.dispose();
-  }
-
-  void _scheduleAutoBack() {
-    if (_autoBackScheduled) return;
-    _autoBackScheduled = true;
-    _autoBackTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) {
-        context.pop();
-      }
     });
   }
 
@@ -140,11 +132,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final showActionButton =
         order != null && !_isCompletedOrFailed(order.status);
 
-    // Auto-navigate back when order is completed or failed
-    if (order != null && _isCompletedOrFailed(order.status)) {
-      _scheduleAutoBack();
-    }
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -163,47 +150,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       body: Stack(
         children: [
           _buildBody(state, order),
-          // Auto-back countdown banner
-          if (order != null && _isCompletedOrFailed(order.status))
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                color: order.status.toLowerCase().contains('delivered')
-                    ? AppColors.success
-                    : AppColors.error,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.arrow_back, color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Returning to orders in 5 seconds...',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      child: const Text(
-                        'Go Now',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -279,6 +225,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             // Order Info Card
             _OrderInfoCard(order: order),
 
+            _OrderCustomerRiskCard(order: order),
+
             // Customer & Locations
             _LocationsCard(
               order: order,
@@ -301,9 +249,122 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             // Timeline
             _TimelineCard(order: order),
 
-            const SizedBox(height: 100),
+            const SizedBox(height: 180),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OrderCustomerRiskCard extends StatelessWidget {
+  final DeliveryOrderDetail order;
+
+  const _OrderCustomerRiskCard({required this.order});
+
+  double get _amountToCollect {
+    if (order.codAmount > 0) return order.codAmount;
+    return order.order?.totalAmount ?? 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final paymentMethod = (order.order?.paymentMethod ?? '').toUpperCase();
+    final status = order.status.toUpperCase();
+    final isClosed = const {
+      DeliveryStatus.delivered,
+      DeliveryStatus.failed,
+      DeliveryStatus.cancelled,
+    }.contains(status);
+
+    final bool needsCodCollection =
+        paymentMethod == 'COD' && !isClosed && _amountToCollect > 0;
+    final bool isCreditOrder = paymentMethod == 'CREDIT';
+
+    if (!needsCodCollection && !isCreditOrder && !order.isCod) {
+      return const SizedBox.shrink();
+    }
+
+    final color = isCreditOrder
+        ? AppColors.warning
+        : needsCodCollection
+            ? AppColors.error
+            : AppColors.success;
+    final icon = isCreditOrder
+        ? Icons.credit_card_rounded
+        : needsCodCollection
+            ? Icons.payments_outlined
+            : Icons.verified_outlined;
+    final title = isCreditOrder
+        ? 'Credit customer'
+        : needsCodCollection
+            ? 'COD collection required'
+            : 'COD collected';
+    final message = isCreditOrder
+        ? 'Verify this customer credit status before handing over the order.'
+        : needsCodCollection
+            ? 'Collect ${_amountToCollect.currency} before completing delivery.'
+            : 'Cash collection is already closed for this order.';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (order.customer?.name.isNotEmpty == true) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    order.customer!.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -438,20 +499,32 @@ class _LocationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final deliveryLocation = order.deliveryLocation;
+    final hasDeliveryAddress =
+        deliveryLocation?.fullAddress.trim().isNotEmpty ?? false;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Delivery Route',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Delivery Route',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                _RouteStatusChip(hasCoordinates: order.hasDeliveryCoordinates),
+              ],
             ),
             const SizedBox(height: 16),
             // Pickup Location
@@ -498,6 +571,8 @@ class _LocationsCard extends StatelessWidget {
                       ),
                       Text(
                         order.pickupLocation?.address ?? '-',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -544,6 +619,8 @@ class _LocationsCard extends StatelessWidget {
                       if (order.hasDeliveryCoordinates)
                         Text(
                           order.deliveryLocation?.displayAddress ?? '-',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 13,
                             color: AppColors.textSecondary,
@@ -564,35 +641,45 @@ class _LocationsCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
+            _OrderMapPreview(
+              order: order,
+              onNavigate: onNavigate,
+              onUpdateLocation: onUpdateLocation,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: order.customer?.phone.isNotEmpty == true
+                        ? onCallCustomer
+                        : null,
+                    icon: const Icon(Icons.phone_outlined, size: 18),
+                    label: const Text('Call'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        order.hasDeliveryCoordinates || hasDeliveryAddress
+                            ? onNavigate
+                            : null,
+                    icon: const Icon(Icons.navigation_outlined, size: 18),
+                    label: const Text('Navigate'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             if (order.hasDeliveryCoordinates) ...[
               // Action Buttons - shown when location exists
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onCallCustomer,
-                      icon: const Icon(Icons.phone_outlined, size: 18),
-                      label: const Text('Call'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: onNavigate,
-                      icon: const Icon(Icons.navigation_outlined, size: 18),
-                      label: const Text('Navigate'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Update Location Button
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -621,6 +708,222 @@ class _LocationsCard extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteStatusChip extends StatelessWidget {
+  final bool hasCoordinates;
+
+  const _RouteStatusChip({required this.hasCoordinates});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = hasCoordinates ? AppColors.success : AppColors.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            hasCoordinates
+                ? Icons.location_on_outlined
+                : Icons.location_searching_outlined,
+            color: color,
+            size: 14,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            hasCoordinates ? 'GPS' : 'Address',
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderMapPreview extends StatelessWidget {
+  final DeliveryOrderDetail order;
+  final VoidCallback onNavigate;
+  final VoidCallback onUpdateLocation;
+
+  const _OrderMapPreview({
+    required this.order,
+    required this.onNavigate,
+    required this.onUpdateLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!order.hasDeliveryCoordinates) {
+      return _AddressMapFallback(
+        address: order.deliveryLocation?.fullAddress,
+        onUpdateLocation: onUpdateLocation,
+      );
+    }
+
+    final deliveryPosition = LatLng(
+      order.deliveryLocation!.latitude!,
+      order.deliveryLocation!.longitude!,
+    );
+    final pickupLocation = order.pickupLocation;
+    final hasPickupCoordinates = pickupLocation?.hasCoordinates ?? false;
+    final markers = <Marker>{
+      Marker(
+        markerId: MarkerId('delivery_${order.id}'),
+        position: deliveryPosition,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        infoWindow: InfoWindow(
+          title: order.customer?.name ?? 'Customer',
+          snippet: order.deliveryLocation?.displayAddress,
+        ),
+      ),
+      if (hasPickupCoordinates)
+        Marker(
+          markerId: MarkerId('pickup_${order.id}'),
+          position:
+              LatLng(pickupLocation!.latitude!, pickupLocation.longitude!),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          infoWindow: InfoWindow(
+            title: pickupLocation.name.isEmpty ? 'Pickup' : pickupLocation.name,
+            snippet: pickupLocation.address,
+          ),
+        ),
+    };
+
+    return SizedBox(
+      height: 210,
+      width: double.infinity,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          children: [
+            GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: deliveryPosition,
+                zoom: 15,
+              ),
+              markers: markers,
+              zoomControlsEnabled: false,
+              myLocationButtonEnabled: false,
+              mapToolbarEnabled: false,
+              scrollGesturesEnabled: false,
+              rotateGesturesEnabled: false,
+              tiltGesturesEnabled: false,
+              onTap: (_) => onNavigate(),
+            ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: Material(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: onNavigate,
+                  borderRadius: BorderRadius.circular(8),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          color: Colors.white,
+                          size: 15,
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          'Open',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddressMapFallback extends StatelessWidget {
+  final String? address;
+  final VoidCallback onUpdateLocation;
+
+  const _AddressMapFallback({
+    required this.address,
+    required this.onUpdateLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAddress = address != null && address!.trim().isNotEmpty;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 205),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              hasAddress ? Icons.map_outlined : Icons.location_off_outlined,
+              color: hasAddress ? AppColors.warning : AppColors.textTertiary,
+              size: 36,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              hasAddress ? 'Address available, GPS missing' : 'No GPS location',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              hasAddress
+                  ? address!
+                  : 'Add customer coordinates to enable map preview and precise routing.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onUpdateLocation,
+              icon: const Icon(Icons.my_location_rounded, size: 16),
+              label: Text(hasAddress ? 'Pin GPS Location' : 'Add Location'),
+            ),
           ],
         ),
       ),
@@ -888,19 +1191,15 @@ class _ActionBottomSheet extends ConsumerWidget {
                 ],
               ),
             ] else
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: isLoading
+              CustomButton(
+                text: actionInfo['text'],
+                onPressed: isLoading
                     ? null
                     : () => _handleAction(context, ref, order.status),
-                child: CustomButton(
-                  text: actionInfo['text'],
-                  onPressed: () => _handleAction(context, ref, order.status),
-                  isLoading: isLoading,
-                  icon: actionInfo['icon'],
-                  backgroundColor: actionInfo['color'],
-                  width: double.infinity,
-                ),
+                isLoading: isLoading,
+                icon: actionInfo['icon'],
+                backgroundColor: actionInfo['color'],
+                width: double.infinity,
               ),
           ],
         ),
@@ -957,7 +1256,19 @@ class _ActionBottomSheet extends ConsumerWidget {
         break;
     }
 
-    if (context.mounted && !success) {
+    if (!context.mounted) return;
+
+    if (success) {
+      await _refreshDeliveryWorkflow(ref);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_successMessageForStatus(status)),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } else {
       // Show error only on failure
       final state = ref.read(orderDetailProvider(order.id));
       final errorMessage =
@@ -968,6 +1279,20 @@ class _ActionBottomSheet extends ConsumerWidget {
           backgroundColor: AppColors.error,
         ),
       );
+    }
+  }
+
+  String _successMessageForStatus(String status) {
+    switch (status) {
+      case DeliveryStatus.assigned:
+      case DeliveryStatus.accepted:
+      case DeliveryStatus.pickedUp:
+        return 'Delivery started';
+      case DeliveryStatus.inTransit:
+      case DeliveryStatus.outForDelivery:
+        return 'Marked arrived';
+      default:
+        return 'Order updated';
     }
   }
 
@@ -1042,6 +1367,7 @@ class _CompleteDeliverySheetState
   }
 
   Future<void> _completeDelivery() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
 
     double? codCollected;
@@ -1074,17 +1400,26 @@ class _CompleteDeliverySheetState
 
     setState(() => _isLoading = false);
 
-    if (mounted) {
+    if (!mounted) return;
+
+    if (success) {
+      await _refreshDeliveryWorkflow(ref);
+      if (!mounted) return;
       Navigator.pop(context);
-      if (!success) {
-        final state = ref.read(orderDetailProvider(widget.order.id));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(state.actionError ?? 'Failed to complete delivery'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delivery completed'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      final state = ref.read(orderDetailProvider(widget.order.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(state.actionError ?? 'Failed to complete delivery'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -1279,7 +1614,7 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
   }
 
   Future<void> _failDelivery() async {
-    if (_selectedReason == null) return;
+    if (_isLoading || _selectedReason == null) return;
 
     setState(() => _isLoading = true);
 
@@ -1292,12 +1627,24 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
 
     setState(() => _isLoading = false);
 
-    if (success && mounted) {
+    if (!mounted) return;
+
+    if (success) {
+      await _refreshDeliveryWorkflow(ref);
+      if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Delivery marked as failed'),
           backgroundColor: AppColors.warning,
+        ),
+      );
+    } else {
+      final state = ref.read(orderDetailProvider(widget.orderId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(state.actionError ?? 'Failed to mark delivery failed'),
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -1371,7 +1718,8 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed:
+                          _isLoading ? null : () => Navigator.pop(context),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -1492,6 +1840,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
   }
 
   Future<void> _updateLocation() async {
+    if (_isUpdating) return;
+
     if (_currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please get your current location first')),
@@ -1513,6 +1863,10 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
     setState(() => _isUpdating = false);
 
     if (mounted) {
+      if (success) {
+        await _refreshDeliveryWorkflow(ref);
+        if (!mounted) return;
+      }
       Navigator.pop(context); // Always close the sheet
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

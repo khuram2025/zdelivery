@@ -52,8 +52,10 @@ class OrderInfo {
       status: json['status'] ?? '',
       subtotal: double.tryParse(json['subtotal']?.toString() ?? '0') ?? 0,
       taxTotal: double.tryParse(json['tax_total']?.toString() ?? '0') ?? 0,
-      shippingTotal: double.tryParse(json['shipping_total']?.toString() ?? '0') ?? 0,
-      totalAmount: double.tryParse(json['total_amount']?.toString() ?? '0') ?? 0,
+      shippingTotal:
+          double.tryParse(json['shipping_total']?.toString() ?? '0') ?? 0,
+      totalAmount:
+          double.tryParse(json['total_amount']?.toString() ?? '0') ?? 0,
       paymentMethod: json['payment_method'] ?? '',
       paymentStatus: json['payment_status'] ?? '',
       customerNotes: json['customer_notes'],
@@ -176,16 +178,36 @@ class DeliveryTimestamps {
 
   factory DeliveryTimestamps.fromJson(Map<String, dynamic> json) {
     return DeliveryTimestamps(
-      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
-      assignedAt: json['assigned_at'] != null ? DateTime.tryParse(json['assigned_at']) : null,
-      acceptedAt: json['accepted_at'] != null ? DateTime.tryParse(json['accepted_at']) : null,
-      pickedUpAt: json['picked_up_at'] != null ? DateTime.tryParse(json['picked_up_at']) : null,
-      inTransitAt: json['in_transit_at'] != null ? DateTime.tryParse(json['in_transit_at']) : null,
-      arrivedAt: json['arrived_at'] != null ? DateTime.tryParse(json['arrived_at']) : null,
-      deliveredAt: json['delivered_at'] != null ? DateTime.tryParse(json['delivered_at']) : null,
-      failedAt: json['failed_at'] != null ? DateTime.tryParse(json['failed_at']) : null,
-      scheduledPickupTime: json['scheduled_pickup_time'] != null ? DateTime.tryParse(json['scheduled_pickup_time']) : null,
-      scheduledDeliveryTime: json['scheduled_delivery_time'] != null ? DateTime.tryParse(json['scheduled_delivery_time']) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'])
+          : null,
+      assignedAt: json['assigned_at'] != null
+          ? DateTime.tryParse(json['assigned_at'])
+          : null,
+      acceptedAt: json['accepted_at'] != null
+          ? DateTime.tryParse(json['accepted_at'])
+          : null,
+      pickedUpAt: json['picked_up_at'] != null
+          ? DateTime.tryParse(json['picked_up_at'])
+          : null,
+      inTransitAt: json['in_transit_at'] != null
+          ? DateTime.tryParse(json['in_transit_at'])
+          : null,
+      arrivedAt: json['arrived_at'] != null
+          ? DateTime.tryParse(json['arrived_at'])
+          : null,
+      deliveredAt: json['delivered_at'] != null
+          ? DateTime.tryParse(json['delivered_at'])
+          : null,
+      failedAt: json['failed_at'] != null
+          ? DateTime.tryParse(json['failed_at'])
+          : null,
+      scheduledPickupTime: json['scheduled_pickup_time'] != null
+          ? DateTime.tryParse(json['scheduled_pickup_time'])
+          : null,
+      scheduledDeliveryTime: json['scheduled_delivery_time'] != null
+          ? DateTime.tryParse(json['scheduled_delivery_time'])
+          : null,
     );
   }
 }
@@ -244,6 +266,7 @@ class DeliveryOrder {
   final String status;
   final String? statusDisplay;
   final int priority;
+  final int? customerId;
   final String? customerName;
   final String? customerMobile;
   final String? agentName;
@@ -271,6 +294,7 @@ class DeliveryOrder {
     required this.status,
     this.statusDisplay,
     required this.priority,
+    this.customerId,
     this.customerName,
     this.customerMobile,
     this.agentName,
@@ -317,31 +341,45 @@ class DeliveryOrder {
         double.tryParse(paymentBreakdown?['subtotal']?.toString() ?? '') ??
         double.tryParse(json['order_amount']?.toString() ?? '');
 
-    final deliveryFee = double.tryParse(json['delivery_fee']?.toString() ?? '') ??
+    final deliveryFee = double.tryParse(
+            json['delivery_fee']?.toString() ?? '') ??
         double.tryParse(paymentBreakdown?['delivery_fee']?.toString() ?? '') ??
         double.tryParse(json['delivery_charges']?.toString() ?? '');
 
     // Handle nested customer_info structure
     final customerInfo = json['customer_info'] as Map<String, dynamic>?;
+    final customer = json['customer'] as Map<String, dynamic>?;
+    final customerId = int.tryParse(
+      (json['customer_id'] ?? customerInfo?['id'] ?? customer?['id'])
+              ?.toString() ??
+          '',
+    );
     final customerName = json['customer_name'] ?? customerInfo?['name'];
-    final customerMobile = json['customer_mobile'] ?? customerInfo?['mobile'] ?? customerInfo?['phone'];
+    final customerMobile = json['customer_mobile'] ??
+        customerInfo?['mobile'] ??
+        customerInfo?['phone'];
 
     // Handle nested delivery_info structure
     final deliveryInfo = json['delivery_info'] as Map<String, dynamic>?;
-    final deliveryAddress = json['delivery_address'] ?? deliveryInfo?['address'];
+    final deliveryAddress =
+        json['delivery_address'] ?? deliveryInfo?['address'];
     final deliveryCity = json['delivery_city'] ?? deliveryInfo?['city'];
     final deliveryArea = json['delivery_area'] ?? deliveryInfo?['area'];
     final zoneName = json['zone_name'] ?? deliveryInfo?['zone'];
 
     // GPS coordinates for delivery location
-    final deliveryLatitude = double.tryParse(json['delivery_latitude']?.toString() ?? '') ??
-        double.tryParse(deliveryInfo?['latitude']?.toString() ?? '');
-    final deliveryLongitude = double.tryParse(json['delivery_longitude']?.toString() ?? '') ??
-        double.tryParse(deliveryInfo?['longitude']?.toString() ?? '');
+    final deliveryLatitude =
+        double.tryParse(json['delivery_latitude']?.toString() ?? '') ??
+            double.tryParse(deliveryInfo?['latitude']?.toString() ?? '');
+    final deliveryLongitude =
+        double.tryParse(json['delivery_longitude']?.toString() ?? '') ??
+            double.tryParse(deliveryInfo?['longitude']?.toString() ?? '');
 
     // GPS coordinates for pickup location (store)
-    final pickupLatitude = double.tryParse(json['pickup_latitude']?.toString() ?? '');
-    final pickupLongitude = double.tryParse(json['pickup_longitude']?.toString() ?? '');
+    final pickupLatitude =
+        double.tryParse(json['pickup_latitude']?.toString() ?? '');
+    final pickupLongitude =
+        double.tryParse(json['pickup_longitude']?.toString() ?? '');
 
     // Handle timestamps structure
     final timestamps = json['timestamps'] as Map<String, dynamic>?;
@@ -350,10 +388,14 @@ class DeliveryOrder {
 
     // COD amount from payment_breakdown
     final codAmount = double.tryParse(json['cod_amount']?.toString() ?? '') ??
-        (paymentBreakdown?['is_cod'] == true ? (double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ?? 0) : 0);
+        (paymentBreakdown?['is_cod'] == true
+            ? (double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ??
+                0)
+            : 0);
 
     // Payment method from payment_breakdown
-    final paymentMethod = json['payment_method'] ?? paymentBreakdown?['payment_method'];
+    final paymentMethod =
+        json['payment_method'] ?? paymentBreakdown?['payment_method'];
 
     // Parse scheduled delivery time from various formats
     DateTime? scheduledDeliveryTime;
@@ -372,7 +414,8 @@ class DeliveryOrder {
             ? DateTime.tryParse(json['created_at'])
             : DateTime.now();
         if (createdAt != null) {
-          final datePart = '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}';
+          final datePart =
+              '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}';
           scheduledDeliveryTime = DateTime.tryParse('${datePart}T$schedValue');
         }
       }
@@ -389,6 +432,7 @@ class DeliveryOrder {
       status: json['status'] ?? '',
       statusDisplay: json['status_display'],
       priority: json['priority'] ?? 1,
+      customerId: customerId,
       customerName: customerName,
       customerMobile: customerMobile,
       agentName: json['agent_name'],
@@ -402,10 +446,11 @@ class DeliveryOrder {
       pickupLongitude: pickupLongitude,
       codAmount: codAmount,
       scheduledDeliveryTime: scheduledDeliveryTime,
-      createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now(),
-      deliveredAt: deliveredAtStr != null
-          ? DateTime.tryParse(deliveredAtStr)
-          : null,
+      createdAt: createdAtStr != null
+          ? DateTime.tryParse(createdAtStr) ?? DateTime.now()
+          : DateTime.now(),
+      deliveredAt:
+          deliveredAtStr != null ? DateTime.tryParse(deliveredAtStr) : null,
     );
   }
 
@@ -489,10 +534,15 @@ class DeliveryOrderDetail {
       orderInfo = OrderInfo(
         orderNumber: json['order_number'] ?? '',
         status: json['status'] ?? '',
-        subtotal: double.tryParse(paymentBreakdown?['subtotal']?.toString() ?? '0') ?? 0,
+        subtotal:
+            double.tryParse(paymentBreakdown?['subtotal']?.toString() ?? '0') ??
+                0,
         taxTotal: 0,
-        shippingTotal: double.tryParse(paymentBreakdown?['delivery_fee']?.toString() ?? '0') ?? 0,
-        totalAmount: double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ?? 0,
+        shippingTotal: double.tryParse(
+                paymentBreakdown?['delivery_fee']?.toString() ?? '0') ??
+            0,
+        totalAmount:
+            double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ?? 0,
         paymentMethod: paymentBreakdown?['payment_method'] ?? '',
         paymentStatus: paymentBreakdown?['payment_status'] ?? '',
         items: items?.map((e) => OrderItem.fromJson(e)).toList() ?? [],
@@ -551,20 +601,38 @@ class DeliveryOrderDetail {
     DeliveryTimestamps? timestamps;
     if (timestampsJson != null) {
       timestamps = DeliveryTimestamps(
-        createdAt: timestampsJson['created_at'] != null ? DateTime.tryParse(timestampsJson['created_at']) : null,
-        deliveredAt: timestampsJson['delivered_at'] != null ? DateTime.tryParse(timestampsJson['delivered_at']) : null,
-        assignedAt: timestampsJson['assigned_at'] != null ? DateTime.tryParse(timestampsJson['assigned_at']) : null,
-        acceptedAt: timestampsJson['accepted_at'] != null ? DateTime.tryParse(timestampsJson['accepted_at']) : null,
-        pickedUpAt: timestampsJson['picked_up_at'] != null ? DateTime.tryParse(timestampsJson['picked_up_at']) : null,
-        inTransitAt: timestampsJson['in_transit_at'] != null ? DateTime.tryParse(timestampsJson['in_transit_at']) : null,
-        arrivedAt: timestampsJson['arrived_at'] != null ? DateTime.tryParse(timestampsJson['arrived_at']) : null,
-        failedAt: timestampsJson['failed_at'] != null ? DateTime.tryParse(timestampsJson['failed_at']) : null,
+        createdAt: timestampsJson['created_at'] != null
+            ? DateTime.tryParse(timestampsJson['created_at'])
+            : null,
+        deliveredAt: timestampsJson['delivered_at'] != null
+            ? DateTime.tryParse(timestampsJson['delivered_at'])
+            : null,
+        assignedAt: timestampsJson['assigned_at'] != null
+            ? DateTime.tryParse(timestampsJson['assigned_at'])
+            : null,
+        acceptedAt: timestampsJson['accepted_at'] != null
+            ? DateTime.tryParse(timestampsJson['accepted_at'])
+            : null,
+        pickedUpAt: timestampsJson['picked_up_at'] != null
+            ? DateTime.tryParse(timestampsJson['picked_up_at'])
+            : null,
+        inTransitAt: timestampsJson['in_transit_at'] != null
+            ? DateTime.tryParse(timestampsJson['in_transit_at'])
+            : null,
+        arrivedAt: timestampsJson['arrived_at'] != null
+            ? DateTime.tryParse(timestampsJson['arrived_at'])
+            : null,
+        failedAt: timestampsJson['failed_at'] != null
+            ? DateTime.tryParse(timestampsJson['failed_at'])
+            : null,
       );
     }
 
     // Get COD amount from payment_breakdown if available
-    final codAmount = double.tryParse(paymentBreakdown?['amount_to_collect']?.toString() ?? '') ??
-        double.tryParse(json['cod_amount']?.toString() ?? '0') ?? 0;
+    final codAmount = double.tryParse(
+            paymentBreakdown?['amount_to_collect']?.toString() ?? '') ??
+        double.tryParse(json['cod_amount']?.toString() ?? '0') ??
+        0;
 
     final isCodPayment = paymentBreakdown?['is_cod'] == true ||
         paymentBreakdown?['payment_method'] == 'COD';
@@ -580,11 +648,22 @@ class DeliveryOrderDetail {
       deliveryLocation: deliveryLocation,
       timestamps: timestamps,
       distanceKm: double.tryParse(json['distance_km']?.toString() ?? '0') ?? 0,
-      deliveryFee: double.tryParse(paymentBreakdown?['delivery_fee']?.toString() ?? json['delivery_fee']?.toString() ?? '0') ?? 0,
-      agentCommission: double.tryParse(json['agent_commission']?.toString() ?? '0') ?? 0,
-      codAmount: isCodPayment ? (double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ?? codAmount) : codAmount,
-      codCollected: double.tryParse(json['cod_collected']?.toString() ?? '0') ?? 0,
-      codStatus: paymentBreakdown?['payment_status'] ?? json['cod_status'] ?? 'NOT_APPLICABLE',
+      deliveryFee: double.tryParse(
+              paymentBreakdown?['delivery_fee']?.toString() ??
+                  json['delivery_fee']?.toString() ??
+                  '0') ??
+          0,
+      agentCommission:
+          double.tryParse(json['agent_commission']?.toString() ?? '0') ?? 0,
+      codAmount: isCodPayment
+          ? (double.tryParse(paymentBreakdown?['total']?.toString() ?? '0') ??
+              codAmount)
+          : codAmount,
+      codCollected:
+          double.tryParse(json['cod_collected']?.toString() ?? '0') ?? 0,
+      codStatus: paymentBreakdown?['payment_status'] ??
+          json['cod_status'] ??
+          'NOT_APPLICABLE',
       deliveryPhoto: json['delivery_photo'],
       signatureImage: json['signature_image'],
       recipientName: json['recipient_name'],
@@ -593,7 +672,8 @@ class DeliveryOrderDetail {
       failureNotes: json['failure_notes'],
       retryCount: json['retry_count'] ?? 0,
       maxRetries: json['max_retries'] ?? 3,
-      customerRating: double.tryParse(json['customer_rating']?.toString() ?? ''),
+      customerRating:
+          double.tryParse(json['customer_rating']?.toString() ?? ''),
       customerFeedback: json['customer_feedback'],
       tipAmount: double.tryParse(json['tip_amount']?.toString() ?? '0') ?? 0,
       statusHistory: (json['status_history'] as List<dynamic>?)
@@ -601,7 +681,9 @@ class DeliveryOrderDetail {
               .toList() ??
           [],
       route: json['route'] != null ? RouteInfo.fromJson(json['route']) : null,
-      createdAt: DateTime.tryParse(timestampsJson?['created_at'] ?? json['created_at'] ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(
+              timestampsJson?['created_at'] ?? json['created_at'] ?? '') ??
+          DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
     );
   }

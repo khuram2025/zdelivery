@@ -242,6 +242,10 @@ class OrderHistoryNotifier extends StateNotifier<OrderHistoryState> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  DateTime _historySortDate(DeliveryOrder order) {
+    return order.deliveredAt ?? order.scheduledDeliveryTime ?? order.createdAt;
+  }
+
   Future<void> loadHistory(
       {HistoryFilter? filter, DateTime? startDate, DateTime? endDate}) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -270,7 +274,8 @@ class OrderHistoryNotifier extends StateNotifier<OrderHistoryState> {
         all = true;
         break;
       case HistoryFilter.custom:
-        // Use provided dates
+        start = startDate ?? state.startDate;
+        end = endDate ?? state.endDate;
         break;
     }
 
@@ -290,22 +295,12 @@ class OrderHistoryNotifier extends StateNotifier<OrderHistoryState> {
         all: all,
         limit: 50,
       );
-      // Sort by scheduled delivery time (earliest first)
+      // Sort history newest first; riders usually need the most recent result.
       completed.sort((DeliveryOrder a, DeliveryOrder b) {
-        final aTime = a.scheduledDeliveryTime;
-        final bTime = b.scheduledDeliveryTime;
-        if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        return aTime.compareTo(bTime);
+        return _historySortDate(b).compareTo(_historySortDate(a));
       });
       failed.sort((DeliveryOrder a, DeliveryOrder b) {
-        final aTime = a.scheduledDeliveryTime;
-        final bTime = b.scheduledDeliveryTime;
-        if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        return aTime.compareTo(bTime);
+        return _historySortDate(b).compareTo(_historySortDate(a));
       });
 
       state = state.copyWith(
@@ -385,6 +380,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   }
 
   Future<bool> acceptOrder({double? latitude, double? longitude}) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       await _deliveryService.acceptOrder(orderId,
@@ -402,6 +398,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
 
   Future<bool> rejectOrder(String reason,
       {double? latitude, double? longitude}) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       await _deliveryService.rejectOrder(orderId,
@@ -418,6 +415,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
 
   Future<bool> pickupOrder(
       {double? latitude, double? longitude, String? notes, File? photo}) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       await _deliveryService.pickupOrder(orderId,
@@ -434,6 +432,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   }
 
   Future<bool> startTransit({double? latitude, double? longitude}) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       final response = await _deliveryService.startTransit(orderId,
@@ -459,6 +458,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   }
 
   Future<bool> markArrived({double? latitude, double? longitude}) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       final response = await _deliveryService.markArrived(orderId,
@@ -492,6 +492,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     File? deliveryPhoto,
     File? signatureImage,
   }) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
 
     final currentStatus = state.order?.status.toUpperCase() ?? '';
@@ -600,6 +601,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     double? latitude,
     double? longitude,
   }) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
 
     final currentStatus = state.order?.status.toUpperCase() ?? '';
@@ -704,6 +706,7 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     String? address,
     String? notes,
   }) async {
+    if (state.isActionLoading) return false;
     state = state.copyWith(isActionLoading: true, actionError: null);
     try {
       await _deliveryService.updateCustomerLocation(

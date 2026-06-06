@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/connectivity_provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -14,12 +15,21 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notificationsProvider.notifier).startMonitor();
+    });
+  }
+
   int _getCurrentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/orders')) return 1;
     if (location.startsWith('/earnings')) return 2;
-    if (location.startsWith('/profile')) return 3;
+    if (location.startsWith('/customers')) return 3;
+    if (location.startsWith('/profile')) return 4;
     return 0;
   }
 
@@ -35,6 +45,9 @@ class _MainShellState extends ConsumerState<MainShell> {
         context.go('/earnings');
         break;
       case 3:
+        context.go('/customers');
+        break;
+      case 4:
         context.go('/profile');
         break;
     }
@@ -141,11 +154,18 @@ class _MainShellState extends ConsumerState<MainShell> {
                   onTap: () => _onItemTapped(2, context),
                 ),
                 _NavItem(
+                  icon: Icons.people_alt_outlined,
+                  activeIcon: Icons.people_alt_rounded,
+                  label: 'Customers',
+                  isActive: currentIndex == 3,
+                  onTap: () => _onItemTapped(3, context),
+                ),
+                _NavItem(
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
                   label: 'Profile',
-                  isActive: currentIndex == 3,
-                  onTap: () => _onItemTapped(3, context),
+                  isActive: currentIndex == 4,
+                  onTap: () => _onItemTapped(4, context),
                 ),
               ],
             ),
@@ -173,36 +193,43 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? AppColors.primary : AppColors.textTertiary,
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive
+                ? AppColors.primary.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isActive ? activeIcon : icon,
                 color: isActive ? AppColors.primary : AppColors.textTertiary,
+                size: 23,
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    color:
+                        isActive ? AppColors.primary : AppColors.textTertiary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
