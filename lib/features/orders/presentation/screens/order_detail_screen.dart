@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,11 +11,13 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/widgets/static_google_map.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
 import '../../data/models.dart';
 import '../providers/orders_provider.dart';
+import '../widgets/orders_map_view.dart';
 
 Future<void> _refreshDeliveryWorkflow(WidgetRef ref) async {
   await Future.wait<void>([
@@ -120,7 +123,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => _UpdateLocationSheet(
         orderId: order.id,
-        currentAddress: order.deliveryLocation?.fullAddress,
+        currentAddress: order.deliveryLocation?.address,
+        currentCity: order.deliveryLocation?.city,
+        currentArea: order.deliveryLocation?.area,
       ),
     );
   }
@@ -499,9 +504,7 @@ class _LocationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final deliveryLocation = order.deliveryLocation;
-    final hasDeliveryAddress =
-        deliveryLocation?.fullAddress.trim().isNotEmpty ?? false;
+    final hasDeliveryAddress = order.hasDeliveryAddress;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -616,7 +619,7 @@ class _LocationsCard extends StatelessWidget {
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      if (order.hasDeliveryCoordinates)
+                      if (hasDeliveryAddress)
                         Text(
                           order.deliveryLocation?.displayAddress ?? '-',
                           maxLines: 3,
@@ -628,7 +631,7 @@ class _LocationsCard extends StatelessWidget {
                         )
                       else
                         const Text(
-                          'No location',
+                          'No address saved',
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.error,
@@ -767,63 +770,85 @@ class _OrderMapPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = orderMapStatusStyle(order.status);
+
     if (!order.hasDeliveryCoordinates) {
       return _AddressMapFallback(
         address: order.deliveryLocation?.fullAddress,
+        statusStyle: style,
+        onNavigate: onNavigate,
         onUpdateLocation: onUpdateLocation,
       );
     }
 
-    final deliveryPosition = LatLng(
-      order.deliveryLocation!.latitude!,
-      order.deliveryLocation!.longitude!,
-    );
     final pickupLocation = order.pickupLocation;
     final hasPickupCoordinates = pickupLocation?.hasCoordinates ?? false;
-    final markers = <Marker>{
-      Marker(
-        markerId: MarkerId('delivery_${order.id}'),
-        position: deliveryPosition,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-        infoWindow: InfoWindow(
-          title: order.customer?.name ?? 'Customer',
-          snippet: order.deliveryLocation?.displayAddress,
-        ),
+    final markers = <StaticMapMarker>[
+      StaticMapMarker(
+        latitude: order.deliveryLocation!.latitude!,
+        longitude: order.deliveryLocation!.longitude!,
+        color: orderMapStaticMarkerColor(order.status),
+        label: 'D',
       ),
       if (hasPickupCoordinates)
-        Marker(
-          markerId: MarkerId('pickup_${order.id}'),
-          position:
-              LatLng(pickupLocation!.latitude!, pickupLocation.longitude!),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: InfoWindow(
-            title: pickupLocation.name.isEmpty ? 'Pickup' : pickupLocation.name,
-            snippet: pickupLocation.address,
-          ),
+        StaticMapMarker(
+          latitude: pickupLocation!.latitude!,
+          longitude: pickupLocation.longitude!,
+          color: 'blue',
+          label: 'P',
         ),
-    };
+    ];
+
+    final paths = hasPickupCoordinates
+        ? [
+            StaticMapPath(
+              points: [
+                (
+                  latitude: pickupLocation!.latitude!,
+                  longitude: pickupLocation.longitude!,
+                ),
+                (
+                  latitude: order.deliveryLocation!.latitude!,
+                  longitude: order.deliveryLocation!.longitude!,
+                ),
+              ],
+            ),
+          ]
+        : const <StaticMapPath>[];
 
     return SizedBox(
-      height: 210,
+      height: 230,
       width: double.infinity,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Stack(
           children: [
-            GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: deliveryPosition,
-                zoom: 15,
-              ),
+            StaticGoogleMap(
               markers: markers,
-              zoomControlsEnabled: false,
-              myLocationButtonEnabled: false,
-              mapToolbarEnabled: false,
-              scrollGesturesEnabled: false,
-              rotateGesturesEnabled: false,
-              tiltGesturesEnabled: false,
-              onTap: (_) => onNavigate(),
+              paths: paths,
+              centerLatitude: order.deliveryLocation!.latitude!,
+              centerLongitude: order.deliveryLocation!.longitude!,
+              zoom: 15,
+              size: '640x360',
+              onTap: onNavigate,
             ),
+            Positioned(
+              left: 10,
+              top: 10,
+              child: _MapPreviewStatusChip(style: style),
+            ),
+            if (hasPickupCoordinates)
+              Positioned(
+                left: 10,
+                top: 49,
+                child: _MapPreviewStatusChip(
+                  style: const OrderMapStatusStyle(
+                    color: AppColors.info,
+                    icon: Icons.storefront_outlined,
+                    label: 'Pickup',
+                  ),
+                ),
+              ),
             Positioned(
               right: 10,
               bottom: 10,
@@ -867,10 +892,14 @@ class _OrderMapPreview extends StatelessWidget {
 
 class _AddressMapFallback extends StatelessWidget {
   final String? address;
+  final OrderMapStatusStyle statusStyle;
+  final VoidCallback onNavigate;
   final VoidCallback onUpdateLocation;
 
   const _AddressMapFallback({
     required this.address,
+    required this.statusStyle,
+    required this.onNavigate,
     required this.onUpdateLocation,
   });
 
@@ -885,47 +914,107 @@ class _AddressMapFallback extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              hasAddress ? Icons.map_outlined : Icons.location_off_outlined,
-              color: hasAddress ? AppColors.warning : AppColors.textTertiary,
-              size: 36,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              hasAddress ? 'Address available, GPS missing' : 'No GPS location',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
+      child: InkWell(
+        onTap: hasAddress ? onNavigate : onUpdateLocation,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _MapPreviewStatusChip(style: statusStyle),
+              const SizedBox(height: 12),
+              Icon(
+                hasAddress ? Icons.map_outlined : Icons.location_off_outlined,
+                color: hasAddress ? AppColors.warning : AppColors.textTertiary,
+                size: 36,
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              hasAddress
-                  ? address!
-                  : 'Add customer coordinates to enable map preview and precise routing.',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
+              const SizedBox(height: 10),
+              Text(
+                hasAddress
+                    ? 'Address available, GPS missing'
+                    : 'No GPS location',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: onUpdateLocation,
-              icon: const Icon(Icons.my_location_rounded, size: 16),
-              label: Text(hasAddress ? 'Pin GPS Location' : 'Add Location'),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                hasAddress
+                    ? address!
+                    : 'Add customer coordinates to enable map preview and precise routing.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (hasAddress)
+                    OutlinedButton.icon(
+                      onPressed: onNavigate,
+                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                      label: const Text('Open in Maps'),
+                    ),
+                  TextButton.icon(
+                    onPressed: onUpdateLocation,
+                    icon: const Icon(Icons.my_location_rounded, size: 16),
+                    label: Text(hasAddress ? 'Pin GPS' : 'Add Location'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _MapPreviewStatusChip extends StatelessWidget {
+  final OrderMapStatusStyle style;
+
+  const _MapPreviewStatusChip({required this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: style.color.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(style.icon, color: style.color, size: 15),
+          const SizedBox(width: 5),
+          Text(
+            style.label,
+            style: TextStyle(
+              color: style.color,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1745,10 +1834,14 @@ class _FailDeliverySheetState extends ConsumerState<_FailDeliverySheet> {
 class _UpdateLocationSheet extends ConsumerStatefulWidget {
   final int orderId;
   final String? currentAddress;
+  final String? currentCity;
+  final String? currentArea;
 
   const _UpdateLocationSheet({
     required this.orderId,
     this.currentAddress,
+    this.currentCity,
+    this.currentArea,
   });
 
   @override
@@ -1758,6 +1851,8 @@ class _UpdateLocationSheet extends ConsumerStatefulWidget {
 
 class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
   final _addressController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _areaController = TextEditingController();
   final _notesController = TextEditingController();
   Position? _currentPosition;
   bool _isLoadingLocation = false;
@@ -1767,6 +1862,9 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
   @override
   void initState() {
     super.initState();
+    _addressController.text = widget.currentAddress?.trim() ?? '';
+    _cityController.text = widget.currentCity?.trim() ?? '';
+    _areaController.text = widget.currentArea?.trim() ?? '';
     // Auto-fetch location immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _getCurrentLocation();
@@ -1776,6 +1874,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
   @override
   void dispose() {
     _addressController.dispose();
+    _cityController.dispose();
+    _areaController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -1857,6 +1957,8 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
       longitude: _currentPosition!.longitude,
       address:
           _addressController.text.isNotEmpty ? _addressController.text : null,
+      city: _cityController.text.isNotEmpty ? _cityController.text : null,
+      area: _areaController.text.isNotEmpty ? _areaController.text : null,
       notes: _notesController.text.isNotEmpty ? _notesController.text : null,
     );
 
@@ -1921,7 +2023,7 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Use your current GPS location to update the delivery address',
+                'Pin the customer GPS location and keep address fields aligned with the saved customer record.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -2175,9 +2277,33 @@ class _UpdateLocationSheetState extends ConsumerState<_UpdateLocationSheet> {
                 TextField(
                   controller: _addressController,
                   decoration: const InputDecoration(
-                    labelText: 'Address Description (Optional)',
-                    hintText: 'e.g., Near City Park, Gate 2',
+                    labelText: 'Street Address',
+                    hintText: 'House, shop, street, or landmark',
                   ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _cityController,
+                        decoration: const InputDecoration(
+                          labelText: 'City',
+                          hintText: 'e.g., Jhang',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _areaController,
+                        decoration: const InputDecoration(
+                          labelText: 'Area',
+                          hintText: 'Neighborhood',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 TextField(

@@ -141,7 +141,12 @@ class DeliveryService {
           if (paymentType != null) 'payment_type': paymentType,
         },
       );
-      return AssignedCustomersData.fromJson(response.data);
+      final data = AssignedCustomersData.fromJson(response.data);
+      return _filterAssignedCustomersFallback(
+        data,
+        search: search,
+        paymentType: paymentType,
+      );
     } on DioException catch (e) {
       if (!_canUseCustomerFallback(e)) rethrow;
       final fallback = await _getAssignedCustomersFromOrders();
@@ -343,6 +348,8 @@ class DeliveryService {
     required double latitude,
     required double longitude,
     String? address,
+    String? city,
+    String? area,
     String? notes,
   }) async {
     final response = await _apiService.post(
@@ -350,7 +357,12 @@ class DeliveryService {
       data: {
         'latitude': latitude,
         'longitude': longitude,
-        if (address != null) 'address': address,
+        if (address != null) ...{
+          'address': address,
+          'street_address': address,
+        },
+        if (city != null) 'city': city,
+        if (area != null) 'area': area,
         if (notes != null) 'notes': notes,
       },
     );
@@ -458,11 +470,44 @@ class DeliveryService {
     } else if (paymentType == 'cod') {
       customers = customers.where((customer) => customer.hasCod).toList();
     }
+    _sortAssignedCustomers(customers, paymentType: paymentType);
     return AssignedCustomersData(
       customers: customers,
       summary: AssignedCustomersSummary.fromCustomers(customers),
       total: customers.length,
       hasNext: false,
     );
+  }
+
+  void _sortAssignedCustomers(
+    List<AssignedCustomer> customers, {
+    String? paymentType,
+  }) {
+    customers.sort((a, b) {
+      if (paymentType == 'credit') {
+        final creditCompare = b.creditAmount.compareTo(a.creditAmount);
+        if (creditCompare != 0) return creditCompare;
+        final remainingCompare =
+            b.wallet.remaining.compareTo(a.wallet.remaining);
+        if (remainingCompare != 0) return remainingCompare;
+      } else if (paymentType == 'cod') {
+        final codDueCompare = b.codDue.compareTo(a.codDue);
+        if (codDueCompare != 0) return codDueCompare;
+        final codCompare = b.codAmount.compareTo(a.codAmount);
+        if (codCompare != 0) return codCompare;
+      } else {
+        final riskCompare = b.wallet.remaining.compareTo(a.wallet.remaining);
+        if (riskCompare != 0) return riskCompare;
+        final activeCompare = b.activeOrders.compareTo(a.activeOrders);
+        if (activeCompare != 0) return activeCompare;
+      }
+
+      final aDate = a.lastOrderAt;
+      final bDate = b.lastOrderAt;
+      if (aDate == null && bDate == null) return a.name.compareTo(b.name);
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return bDate.compareTo(aDate);
+    });
   }
 }

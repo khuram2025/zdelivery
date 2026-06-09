@@ -1,3 +1,33 @@
+String? _cleanText(dynamic value) {
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty || text.toLowerCase() == 'null') {
+    return null;
+  }
+  return text;
+}
+
+String? _firstText(Iterable<dynamic> values) {
+  for (final value in values) {
+    final cleaned = _cleanText(value);
+    if (cleaned != null) return cleaned;
+  }
+  return null;
+}
+
+String _joinUniqueText(Iterable<dynamic> values, {required String fallback}) {
+  final parts = <String>[];
+  final seen = <String>{};
+
+  for (final value in values) {
+    final cleaned = _cleanText(value);
+    if (cleaned == null) continue;
+    final key = cleaned.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    if (seen.add(key)) parts.add(cleaned);
+  }
+
+  return parts.isEmpty ? fallback : parts.join(', ');
+}
+
 class OrderItem {
   final String productName;
   final int quantity;
@@ -124,21 +154,17 @@ class Location {
     );
   }
 
-  /// Full address with city, state, postalCode
+  /// Full address with street, area, city, state, postalCode
   String get fullAddress {
-    final parts = [address];
-    if (city != null && city!.isNotEmpty) parts.add(city!);
-    if (state != null && state!.isNotEmpty) parts.add(state!);
-    if (postalCode != null && postalCode!.isNotEmpty) parts.add(postalCode!);
-    return parts.join(', ');
+    return _joinUniqueText(
+      [address, area, city, state, postalCode],
+      fallback: 'No address',
+    );
   }
 
-  /// Display address with street and area only (no city)
+  /// Display address for compact delivery UI.
   String get displayAddress {
-    final parts = <String>[];
-    if (address.isNotEmpty) parts.add(address);
-    if (area != null && area!.isNotEmpty) parts.add(area!);
-    return parts.isNotEmpty ? parts.join(', ') : 'No address';
+    return _joinUniqueText([address, area, city], fallback: 'No address');
   }
 
   /// Whether this location has valid GPS coordinates
@@ -328,6 +354,15 @@ class DeliveryOrder {
       pickupLatitude!.abs() <= 90 &&
       pickupLongitude!.abs() <= 180;
 
+  String get displayDeliveryAddress {
+    return _joinUniqueText(
+      [deliveryAddress, deliveryArea, deliveryCity, zoneName],
+      fallback: 'No address saved',
+    );
+  }
+
+  bool get hasDeliveryAddress => displayDeliveryAddress != 'No address saved';
+
   factory DeliveryOrder.fromJson(Map<String, dynamic> json) {
     // Handle nested payment_breakdown structure (new API format)
     final paymentBreakdown = json['payment_breakdown'] as Map<String, dynamic>?;
@@ -361,19 +396,57 @@ class DeliveryOrder {
 
     // Handle nested delivery_info structure
     final deliveryInfo = json['delivery_info'] as Map<String, dynamic>?;
-    final deliveryAddress =
-        json['delivery_address'] ?? deliveryInfo?['address'];
-    final deliveryCity = json['delivery_city'] ?? deliveryInfo?['city'];
-    final deliveryArea = json['delivery_area'] ?? deliveryInfo?['area'];
-    final zoneName = json['zone_name'] ?? deliveryInfo?['zone'];
+    final customerLocation = json['customer_location'] as Map<String, dynamic>?;
+    final deliveryAddress = _firstText([
+      json['delivery_address'],
+      deliveryInfo?['address'],
+      deliveryInfo?['street_address'],
+      deliveryInfo?['formatted_address'],
+      customerLocation?['street_address'],
+      customerLocation?['address'],
+      customerInfo?['street_address'],
+      customerInfo?['address'],
+      customer?['street_address'],
+      customer?['address'],
+      json['street_address'],
+      json['customer_address'],
+      json['address'],
+    ]);
+    final deliveryCity = _firstText([
+      json['delivery_city'],
+      deliveryInfo?['city'],
+      customerLocation?['city'],
+      customerInfo?['city'],
+      customer?['city'],
+      json['city'],
+    ]);
+    final deliveryArea = _firstText([
+      json['delivery_area'],
+      deliveryInfo?['area'],
+      customerLocation?['area'],
+      customerInfo?['area'],
+      customer?['area'],
+      json['area'],
+    ]);
+    final zoneName = _firstText([
+      json['zone_name'],
+      deliveryInfo?['zone'],
+      customerLocation?['zone'],
+    ]);
 
     // GPS coordinates for delivery location
     final deliveryLatitude =
         double.tryParse(json['delivery_latitude']?.toString() ?? '') ??
-            double.tryParse(deliveryInfo?['latitude']?.toString() ?? '');
+            double.tryParse(deliveryInfo?['latitude']?.toString() ?? '') ??
+            double.tryParse(customerLocation?['latitude']?.toString() ?? '') ??
+            double.tryParse(customerInfo?['latitude']?.toString() ?? '') ??
+            double.tryParse(customer?['latitude']?.toString() ?? '');
     final deliveryLongitude =
         double.tryParse(json['delivery_longitude']?.toString() ?? '') ??
-            double.tryParse(deliveryInfo?['longitude']?.toString() ?? '');
+            double.tryParse(deliveryInfo?['longitude']?.toString() ?? '') ??
+            double.tryParse(customerLocation?['longitude']?.toString() ?? '') ??
+            double.tryParse(customerInfo?['longitude']?.toString() ?? '') ??
+            double.tryParse(customer?['longitude']?.toString() ?? '');
 
     // GPS coordinates for pickup location (store)
     final pickupLatitude =
@@ -583,14 +656,25 @@ class DeliveryOrderDetail {
     // Parse delivery location from delivery_info or delivery_location
     Location? deliveryLocation;
     final deliveryInfo = json['delivery_info'] as Map<String, dynamic>?;
+    final customerLocation = json['customer_location'] as Map<String, dynamic>?;
     if (deliveryInfo != null) {
       deliveryLocation = Location(
-        name: deliveryInfo['zone'] ?? '',
-        address: deliveryInfo['address'] ?? '',
-        city: deliveryInfo['city'],
-        area: deliveryInfo['area'],
-        latitude: double.tryParse(deliveryInfo['latitude']?.toString() ?? ''),
-        longitude: double.tryParse(deliveryInfo['longitude']?.toString() ?? ''),
+        name:
+            _firstText([deliveryInfo['zone'], customerLocation?['zone']]) ?? '',
+        address: _firstText([
+              deliveryInfo['address'],
+              deliveryInfo['street_address'],
+              customerLocation?['street_address'],
+              customerLocation?['address'],
+            ]) ??
+            '',
+        city: _firstText([deliveryInfo['city'], customerLocation?['city']]),
+        area: _firstText([deliveryInfo['area'], customerLocation?['area']]),
+        latitude: double.tryParse(deliveryInfo['latitude']?.toString() ?? '') ??
+            double.tryParse(customerLocation?['latitude']?.toString() ?? ''),
+        longitude: double.tryParse(
+                deliveryInfo['longitude']?.toString() ?? '') ??
+            double.tryParse(customerLocation?['longitude']?.toString() ?? ''),
       );
     } else if (json['delivery_location'] != null) {
       deliveryLocation = Location.fromJson(json['delivery_location']);
@@ -691,4 +775,7 @@ class DeliveryOrderDetail {
   bool get isCod => order?.paymentMethod == 'COD';
   bool get canRetry => retryCount < maxRetries;
   bool get hasDeliveryCoordinates => deliveryLocation?.hasCoordinates ?? false;
+  bool get hasDeliveryAddress =>
+      deliveryLocation != null &&
+      deliveryLocation!.displayAddress != 'No address';
 }

@@ -160,6 +160,10 @@ class AssignedCustomer {
   final double totalAmount;
   final String? lastOrderNumber;
   final String? paymentMethod;
+  final List<String> paymentMethods;
+  final double creditAmount;
+  final double codAmount;
+  final double codDue;
 
   const AssignedCustomer({
     required this.id,
@@ -180,11 +184,22 @@ class AssignedCustomer {
     required this.totalAmount,
     this.lastOrderNumber,
     this.paymentMethod,
+    this.paymentMethods = const [],
+    this.creditAmount = 0,
+    this.codAmount = 0,
+    this.codDue = 0,
   });
 
   bool get hasIdentity => name.isNotEmpty || mobile.isNotEmpty;
-  bool get hasCredit => wallet.remaining > 0 || paymentMethod == 'CREDIT';
-  bool get hasCod => paymentMethod == 'COD';
+  bool get hasCredit =>
+      creditAmount > 0 ||
+      paymentMethods.contains('CREDIT') ||
+      paymentMethod == 'CREDIT';
+  bool get hasCod =>
+      codAmount > 0 ||
+      codDue > 0 ||
+      paymentMethods.contains('COD') ||
+      paymentMethod == 'COD';
   bool get hasCustomerRisk => riskLevel != CustomerRiskLevel.clear;
   CustomerRiskLevel get riskLevel {
     if (wallet.isOverLimit) return CustomerRiskLevel.blocked;
@@ -261,6 +276,21 @@ class AssignedCustomer {
     );
     final lifetimeSales = _asMap(json['lifetime_sales']);
     final periodSales = _asMap(json['period_sales']);
+    final rawPaymentMethods =
+        json['payment_methods'] ?? json['payment_types'] ?? [];
+    final paymentMethods = rawPaymentMethods is List
+        ? rawPaymentMethods
+            .map((method) => method.toString().toUpperCase())
+            .where((method) => method.isNotEmpty)
+            .toSet()
+            .toList()
+        : <String>[];
+    final paymentMethod = json['payment_method']?.toString().toUpperCase();
+    if (paymentMethod != null &&
+        paymentMethod.isNotEmpty &&
+        !paymentMethods.contains(paymentMethod)) {
+      paymentMethods.add(paymentMethod);
+    }
     final totalAmount = _parseDouble(
       json['total_amount'] ??
           json['order_total'] ??
@@ -333,7 +363,23 @@ class AssignedCustomer {
       totalAmount: totalAmount,
       lastOrderNumber:
           (json['last_order_number'] ?? json['order_number'])?.toString(),
-      paymentMethod: json['payment_method']?.toString().toUpperCase(),
+      paymentMethod: paymentMethod,
+      paymentMethods: paymentMethods,
+      creditAmount: _parseDouble(
+        json['credit_amount'] ??
+            json['credit_due'] ??
+            json['credit_total'] ??
+            json['credit_remaining'],
+      ),
+      codAmount: _parseDouble(
+        json['cod_amount'] ?? json['cod_total'] ?? json['cod_collected'],
+      ),
+      codDue: _parseDouble(
+        json['cod_due'] ??
+            json['cod_to_collect'] ??
+            json['cod_pending'] ??
+            json['cod_remaining'],
+      ),
     );
   }
 
@@ -341,6 +387,23 @@ class AssignedCustomer {
     final sorted = [...orders]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final latest = sorted.first;
+    final paymentMethods = orders
+        .map((order) => order.paymentMethod?.toUpperCase() ?? '')
+        .where((method) => method.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    final creditAmount = orders
+        .where((order) => order.paymentMethod == 'CREDIT')
+        .fold(0.0, (sum, order) => sum + (order.orderTotal ?? order.codAmount));
+    final codAmount = orders
+        .where((order) => order.paymentMethod == 'COD')
+        .fold(0.0, (sum, order) => sum + (order.orderTotal ?? order.codAmount));
+    final codDue = orders
+        .where((order) =>
+            order.paymentMethod == 'COD' &&
+            !order.status.toUpperCase().contains('DELIVERED'))
+        .fold(0.0, (sum, order) => sum + (order.orderTotal ?? order.codAmount));
     final totalRemaining = orders
         .where((order) =>
             order.paymentMethod == 'CREDIT' ||
@@ -397,6 +460,10 @@ class AssignedCustomer {
       totalAmount: totalAmount,
       lastOrderNumber: latest.orderNumber ?? latest.assignmentNumber,
       paymentMethod: latest.paymentMethod?.toUpperCase(),
+      paymentMethods: paymentMethods,
+      creditAmount: creditAmount,
+      codAmount: codAmount,
+      codDue: codDue,
     );
   }
 }

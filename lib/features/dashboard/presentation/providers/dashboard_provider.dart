@@ -96,8 +96,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
         startDate: startDate,
         endDate: endDate,
       );
-      final summary =
-          await _loadSummaryForFilter(newFilter, startDate, endDate);
+      final summary = await _loadSummaryForPeriod(data.period);
 
       state = state.copyWith(isLoading: false, data: data, summary: summary);
     } on DioException catch (e) {
@@ -126,36 +125,15 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     loadDashboard(filter: DashboardPeriodFilter.custom);
   }
 
-  Future<MobileDeliverySummary> _loadSummaryForFilter(
-    DashboardPeriodFilter filter,
-    String? startDate,
-    String? endDate,
+  Future<MobileDeliverySummary> _loadSummaryForPeriod(
+    DashboardPeriod period,
   ) {
-    switch (filter) {
-      case DashboardPeriodFilter.today:
-        return _deliveryService.getMobileSummary(date: 'today');
-      case DashboardPeriodFilter.yesterday:
-        final yesterday = DateTime.now().subtract(const Duration(days: 1));
-        return _deliveryService.getMobileSummary(date: _formatDate(yesterday));
-      case DashboardPeriodFilter.week:
-        final now = DateTime.now();
-        return _deliveryService.getMobileSummary(
-          startDate: _formatDate(now.subtract(const Duration(days: 7))),
-          endDate: _formatDate(now),
-        );
-      case DashboardPeriodFilter.month:
-        final now = DateTime.now();
-        return _deliveryService.getMobileSummary(
-          startDate: _formatDate(DateTime(now.year, now.month - 1, now.day)),
-          endDate: _formatDate(now),
-        );
-      case DashboardPeriodFilter.custom:
-        return _deliveryService.getMobileSummary(
-          startDate: startDate,
-          endDate: endDate,
-        );
-      case DashboardPeriodFilter.all:
-        return _deliveryService.getMobileSummary();
-    }
+    final startDate = period.startDate.trim().isEmpty ? null : period.startDate;
+    final endDate = period.endDate.trim().isEmpty ? null : period.endDate;
+
+    return _deliveryService.getMobileSummary(
+      startDate: startDate,
+      endDate: endDate,
+    );
   }
 }

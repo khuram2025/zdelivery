@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/extensions.dart';
 import '../../../../core/widgets/loading_overlay.dart';
 import '../../../../core/widgets/order_card.dart';
 import '../providers/orders_provider.dart';
@@ -19,6 +20,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   bool _isMapView = false;
+  int _lastHandledTabIndex = 0;
 
   @override
   void initState() {
@@ -49,16 +51,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
 
   void _onTabChanged() {
     if (_tabController.indexIsChanging) return;
+    final currentIndex = _tabController.index;
+    final changedTab = currentIndex != _lastHandledTabIndex;
+    _lastHandledTabIndex = currentIndex;
+
+    if (changedTab || (currentIndex != 0 && _isMapView)) {
+      setState(() {
+        if (currentIndex != 0) {
+          _isMapView = false;
+        }
+      });
+    }
+
     // Refresh data when switching tabs
-    if (_tabController.index == 0) {
+    if (currentIndex == 0) {
       ref.read(ordersProvider.notifier).loadOrders();
     } else {
       // Refresh history for Completed (index 1) and Failed (index 2) tabs
       ref.read(orderHistoryProvider.notifier).loadHistory();
-    }
-    // Reset to list view when leaving Active tab
-    if (_tabController.index != 0 && _isMapView) {
-      setState(() => _isMapView = false);
     }
   }
 
@@ -180,14 +190,140 @@ class _ActiveOrdersTab extends ConsumerWidget {
       onRefresh: () => ref.read(ordersProvider.notifier).loadOrders(),
       child: ListView.builder(
         padding: const EdgeInsets.only(top: 8, bottom: 100),
-        itemCount: activeOrders.length,
+        itemCount: activeOrders.length + 1,
         itemBuilder: (context, index) {
-          final order = activeOrders[index];
+          if (index == 0) {
+            return _ActiveOrdersSummary(orders: activeOrders);
+          }
+          final order = activeOrders[index - 1];
           return OrderCard(
             order: order,
             onTap: () => onOrderTapped(order),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ActiveOrdersSummary extends StatelessWidget {
+  final List<dynamic> orders;
+
+  const _ActiveOrdersSummary({required this.orders});
+
+  @override
+  Widget build(BuildContext context) {
+    final gpsCount =
+        orders.where((o) => o.hasDeliveryCoordinates == true).length;
+    final codDue = orders.fold<double>(
+      0,
+      (total, order) {
+        final amount = order.isCod == true ? order.codAmount : 0;
+        return total + (amount as num).toDouble();
+      },
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SummaryTile(
+              icon: Icons.local_shipping_outlined,
+              label: 'Active',
+              value: orders.length.toString(),
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _SummaryTile(
+              icon: Icons.gps_fixed,
+              label: 'GPS',
+              value: '$gpsCount/${orders.length}',
+              color: AppColors.success,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _SummaryTile(
+              icon: Icons.payments_outlined,
+              label: 'COD due',
+              value: codDue.currency,
+              color: AppColors.warning,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SummaryTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 68,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -504,6 +640,7 @@ class _HistoryOrderCard extends StatelessWidget {
     final displayDate = isCompleted && order.deliveredAt != null
         ? order.deliveredAt
         : order.createdAt;
+    final address = order.displayDeliveryAddress;
 
     return Semantics(
       button: true,
@@ -523,99 +660,125 @@ class _HistoryOrderCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Status Icon
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: (isCompleted ? AppColors.success : AppColors.error)
-                          .withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      isCompleted ? Icons.check_circle : Icons.cancel,
-                      color: isCompleted ? AppColors.success : AppColors.error,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Order Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                order.orderNumber ?? order.assignmentNumber,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              _getAmountText(order),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: isCompleted
-                                    ? AppColors.success
-                                    : AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: (isCompleted
+                                  ? AppColors.success
+                                  : AppColors.error)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
+                        child: Icon(
+                          isCompleted ? Icons.check_circle : Icons.cancel,
+                          color:
+                              isCompleted ? AppColors.success : AppColors.error,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.person_outline,
-                                size: 14, color: AppColors.textTertiary),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                order.customerName ?? 'Customer',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                            Text(
+                              order.orderNumber ?? order.assignmentNumber,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            const Icon(Icons.access_time,
-                                size: 14, color: AppColors.textTertiary),
-                            const SizedBox(width: 4),
+                            const SizedBox(height: 3),
                             Text(
-                              dateFormat.format(displayDate),
+                              order.customerName ?? 'Customer',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 12,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.textSecondary,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _getAmountText(order),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              color: isCompleted
+                                  ? AppColors.success
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            dateFormat.format(displayDate),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textTertiary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton.filledTonal(
+                        onPressed: () => context.push('/orders/${order.id}'),
+                        tooltip: 'View order details',
+                        icon: const Icon(Icons.chevron_right_rounded),
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.08),
+                          fixedSize: const Size(34, 34),
+                          minimumSize: const Size(34, 34),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
                   ),
-
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    onPressed: () => context.push('/orders/${order.id}'),
-                    tooltip: 'View order details',
-                    icon: const Icon(Icons.chevron_right_rounded),
-                    style: IconButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      backgroundColor:
-                          AppColors.primary.withValues(alpha: 0.08),
-                      fixedSize: const Size(38, 38),
-                      minimumSize: const Size(38, 38),
-                      padding: EdgeInsets.zero,
-                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        order.hasDeliveryCoordinates
+                            ? Icons.location_on_outlined
+                            : Icons.map_outlined,
+                        size: 15,
+                        color: AppColors.textTertiary,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: order.hasDeliveryAddress
+                                ? AppColors.textSecondary
+                                : AppColors.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

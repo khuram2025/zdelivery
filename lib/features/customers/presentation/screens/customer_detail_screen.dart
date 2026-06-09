@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
+import '../../../../core/widgets/static_google_map.dart';
 import '../../data/models.dart';
 import '../providers/customers_provider.dart';
 
@@ -637,24 +637,19 @@ class _LocationPanel extends StatelessWidget {
             height: 190,
             width: double.infinity,
             child: customer.hasLocation
-                ? GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(customer.latitude!, customer.longitude!),
-                      zoom: 15,
-                    ),
-                    markers: {
-                      Marker(
-                        markerId: MarkerId('customer_${customer.id}'),
-                        position:
-                            LatLng(customer.latitude!, customer.longitude!),
-                        infoWindow: InfoWindow(title: customer.displayName),
+                ? StaticGoogleMap(
+                    markers: [
+                      StaticMapMarker(
+                        latitude: customer.latitude!,
+                        longitude: customer.longitude!,
+                        color: 'blue',
+                        label: 'C',
                       ),
-                    },
-                    zoomControlsEnabled: false,
-                    myLocationButtonEnabled: false,
-                    scrollGesturesEnabled: false,
-                    rotateGesturesEnabled: false,
-                    tiltGesturesEnabled: false,
+                    ],
+                    centerLatitude: customer.latitude!,
+                    centerLongitude: customer.longitude!,
+                    zoom: 15,
+                    size: '640x360',
                   )
                 : const _NoMapLocation(),
           ),

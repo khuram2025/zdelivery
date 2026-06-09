@@ -53,35 +53,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               onMenuTap: () => _openDrawer(context),
             ),
 
-            // Quick Actions
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _QuickActionCard(
-                        icon: Icons.pending_actions_rounded,
-                        title: 'Pending Orders',
-                        count: ordersState.pendingCount,
-                        color: AppColors.warning,
-                        onTap: () => context.push('/orders/pending'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _QuickActionCard(
-                        icon: Icons.bar_chart_rounded,
-                        title: 'Statistics',
-                        color: AppColors.info,
-                        onTap: () => context.push('/statistics'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
             // Filter Chips
             SliverToBoxAdapter(
               child: _PeriodFilterBar(
@@ -111,6 +82,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _DashboardContent(
                 data: dashboardState.data!,
                 summary: dashboardState.summary,
+                periodLabel: dashboardState.filter.label,
+                pendingCount: ordersState.pendingCount,
               )
             else
               const SliverFillRemaining(
@@ -187,120 +160,107 @@ class _DashboardAppBar extends ConsumerWidget {
     );
 
     return SliverAppBar(
-      expandedHeight: 140,
+      toolbarHeight: 72,
       floating: false,
       pinned: true,
-      backgroundColor: AppColors.primary,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.primary, Color(0xFF1A4FD6)],
+      backgroundColor: AppColors.surface,
+      surfaceTintColor: AppColors.surface,
+      elevation: 0,
+      titleSpacing: 16,
+      title: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: profile?.profilePhoto != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      profile!.profilePhoto!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.person_rounded,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  )
+                : const Icon(Icons.person_rounded, color: AppColors.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  profile?.name ?? 'Loading rider',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  profile?.agentCode?.isNotEmpty == true
+                      ? profile!.agentCode!
+                      : 'Delivery agent',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onStatusTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+              decoration: BoxDecoration(
+                color: (isOnline ? AppColors.success : AppColors.offline)
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (isOnline ? AppColors.success : AppColors.offline)
+                      .withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      // Profile Photo
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(50),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: Colors.white.withAlpha(100), width: 2),
-                        ),
-                        child: profile?.profilePhoto != null
-                            ? ClipOval(
-                                child: Image.network(
-                                  profile!.profilePhoto!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(
-                                    Icons.person,
-                                    color: Colors.white70,
-                                    size: 28,
-                                  ),
-                                ),
-                              )
-                            : const Icon(Icons.person,
-                                color: Colors.white70, size: 28),
-                      ),
-                      const SizedBox(width: 14),
-                      // Name & Code
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              profile?.name ?? 'Loading...',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              profile?.agentCode ?? '',
-                              style: TextStyle(
-                                color: Colors.white.withAlpha(180),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Status Badge
-                      GestureDetector(
-                        onTap: onStatusTap,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isOnline
-                                ? AppColors.success
-                                : Colors.white.withAlpha(50),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color:
-                                      isOnline ? Colors.white : Colors.white70,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                isOnline ? 'Online' : 'Offline',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: isOnline ? AppColors.success : AppColors.offline,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isOnline ? 'Online' : 'Offline',
+                    style: TextStyle(
+                      color: isOnline ? AppColors.success : AppColors.offline,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        ),
+        ],
       ),
       actions: [
         IconButton(
@@ -322,7 +282,7 @@ class _NotificationIconBadge extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        const Icon(Icons.notifications_outlined, color: Colors.white),
+        const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
         if (count > 0)
           Positioned(
             right: -4,
@@ -366,7 +326,7 @@ class _PeriodFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -441,7 +401,7 @@ class _FilterChip extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
             borderRadius: BorderRadius.circular(10),
@@ -464,10 +424,14 @@ class _FilterChip extends StatelessWidget {
 class _DashboardContent extends StatelessWidget {
   final DashboardData data;
   final MobileDeliverySummary? summary;
+  final String periodLabel;
+  final int pendingCount;
 
   const _DashboardContent({
     required this.data,
     this.summary,
+    required this.periodLabel,
+    required this.pendingCount,
   });
 
   @override
@@ -476,39 +440,57 @@ class _DashboardContent extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
-          // Today's Quick Stats
-          TodayStatsCard(snapshot: data.todaySnapshot),
-          const SizedBox(height: 16),
-
-          if (summary != null) ...[
-            MobileSummaryCard(summary: summary!),
-            const SizedBox(height: 16),
+          HomeWorkPanel(
+            data: data,
+            summary: summary,
+            periodLabel: periodLabel,
+            pendingCount: pendingCount,
+            onPendingTap: () => context.push('/orders/pending'),
+            onOrdersTap: () => context.go('/orders'),
+            onCustomersTap: () => context.go('/customers'),
+          ),
+          const SizedBox(height: 10),
+          HomeMoneyPanel(
+            earnings: data.earnings,
+            codSummary: data.codSummary,
+            summary: summary,
+          ),
+          const SizedBox(height: 10),
+          HomePerformancePanel(
+            stats: data.deliveryStats,
+            summary: summary,
+            performance: data.performance,
+            rating: data.rating,
+          ),
+          if (summary != null &&
+              (summary!.codCustomers.isNotEmpty ||
+                  summary!.creditCustomers.isNotEmpty)) ...[
+            const SizedBox(height: 10),
             SummaryCustomerLists(summary: summary!),
-            const SizedBox(height: 16),
           ],
-
-          // Delivery Stats
-          DeliveryStatsCard(stats: data.deliveryStats),
-          const SizedBox(height: 16),
-
-          // Earnings Card
-          EarningsCard(earnings: data.earnings),
-          const SizedBox(height: 16),
-
-          // COD Summary
-          CodSummaryCard(codSummary: data.codSummary),
-          const SizedBox(height: 16),
-
-          // Performance Metrics
-          PerformanceCard(performance: data.performance),
-          const SizedBox(height: 16),
-
-          // Rating Card
-          RatingCard(rating: data.rating),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
         ]),
       ),
     );
+  }
+}
+
+extension on DashboardPeriodFilter {
+  String get label {
+    switch (this) {
+      case DashboardPeriodFilter.today:
+        return 'Today';
+      case DashboardPeriodFilter.yesterday:
+        return 'Yesterday';
+      case DashboardPeriodFilter.week:
+        return '7 Days';
+      case DashboardPeriodFilter.month:
+        return '30 Days';
+      case DashboardPeriodFilter.all:
+        return 'All Time';
+      case DashboardPeriodFilter.custom:
+        return 'Custom Range';
+    }
   }
 }
 
@@ -690,79 +672,6 @@ class _StatusOption extends StatelessWidget {
             ),
             if (isSelected) Icon(Icons.check_circle, color: color, size: 24),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// Quick Action Card
-class _QuickActionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final int? count;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickActionCard({
-    required this.icon,
-    required this.title,
-    this.count,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withAlpha(25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (count != null)
-                      Text(
-                        '$count pending',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: AppColors.textTertiary,
-              ),
-            ],
-          ),
         ),
       ),
     );

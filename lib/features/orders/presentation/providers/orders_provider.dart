@@ -704,6 +704,8 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     required double latitude,
     required double longitude,
     String? address,
+    String? city,
+    String? area,
     String? notes,
   }) async {
     if (state.isActionLoading) return false;
@@ -714,6 +716,8 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
         latitude: latitude,
         longitude: longitude,
         address: address,
+        city: city,
+        area: area,
         notes: notes,
       );
       await loadOrderDetail();

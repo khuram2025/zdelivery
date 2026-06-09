@@ -1,11 +1,17 @@
 class ApiConstants {
   // Primary endpoint (DNS). Preferred whenever it resolves.
-  static const String primaryBaseUrl = 'https://dev.zayyrah.com/api/v1';
+  static const String primaryBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://zayyrah.com/api/v1',
+  );
 
   // Secondary endpoint (direct IP). Used only when the DNS host can't be
   // resolved/reached. Must point at the SAME backend as [primaryBaseUrl].
   // static const String fallbackBaseUrl = 'http://54.166.200.11:8001/api/v1';
-  static const String fallbackBaseUrl = 'http://54.209.158.254:8004/api/v1';
+  static const String fallbackBaseUrl = String.fromEnvironment(
+    'API_FALLBACK_BASE_URL',
+    defaultValue: 'http://54.209.158.254:8004/api/v1',
+  );
 
   /// Endpoints in preference order: DNS first, IP fallback second.
   static const List<String> baseUrls = [primaryBaseUrl, fallbackBaseUrl];

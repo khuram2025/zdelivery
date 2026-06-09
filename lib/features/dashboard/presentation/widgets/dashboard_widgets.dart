@@ -4,6 +4,633 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/extensions.dart';
 import '../../data/models.dart';
 
+class HomeWorkPanel extends StatelessWidget {
+  final DashboardData data;
+  final MobileDeliverySummary? summary;
+  final String periodLabel;
+  final int pendingCount;
+  final VoidCallback onPendingTap;
+  final VoidCallback onOrdersTap;
+  final VoidCallback onCustomersTap;
+
+  const HomeWorkPanel({
+    super.key,
+    required this.data,
+    required this.summary,
+    required this.periodLabel,
+    required this.pendingCount,
+    required this.onPendingTap,
+    required this.onOrdersTap,
+    required this.onCustomersTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeOrders =
+        summary?.workload.activeOrders ?? data.todaySnapshot.deliveriesPending;
+    final delivered =
+        summary?.completion.delivered ?? data.todaySnapshot.deliveriesCompleted;
+    final failed =
+        summary?.completion.failed ?? data.deliveryStats.failedDeliveries;
+    final customerCount = (summary?.codCustomers.length ?? 0) +
+        (summary?.creditCustomers.length ?? 0);
+
+    return _DashboardPanel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.route_rounded,
+                  color: AppColors.primary,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      periodLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      periodLabel == 'Today'
+                          ? 'Assigned delivery workload'
+                          : 'Assigned workload for selected period',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _InlineStatus(
+                value: '$activeOrders',
+                label: 'active',
+                color: activeOrders > 0 ? AppColors.warning : AppColors.success,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _HomeMetricTile(
+                  label: 'Pending',
+                  value: '$pendingCount',
+                  icon: Icons.pending_actions_rounded,
+                  color: AppColors.warning,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeMetricTile(
+                  label: 'Delivered',
+                  value: '$delivered',
+                  icon: Icons.task_alt_rounded,
+                  color: AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeMetricTile(
+                  label: 'Failed',
+                  value: '$failed',
+                  icon: Icons.cancel_outlined,
+                  color: AppColors.error,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _HomeActionButton(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Pending',
+                  onTap: onPendingTap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeActionButton(
+                  icon: Icons.list_alt_rounded,
+                  label: 'Orders',
+                  onTap: onOrdersTap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeActionButton(
+                  icon: Icons.people_alt_outlined,
+                  label: customerCount > 0
+                      ? 'Customers $customerCount'
+                      : 'Customers',
+                  onTap: onCustomersTap,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HomeMoneyPanel extends StatelessWidget {
+  final EarningsSummary earnings;
+  final CodSummary codSummary;
+  final MobileDeliverySummary? summary;
+
+  const HomeMoneyPanel({
+    super.key,
+    required this.earnings,
+    required this.codSummary,
+    required this.summary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final codToCollect =
+        summary?.payments.codToCollect.amount ?? codSummary.codPending;
+    final codCollected =
+        summary?.payments.codCollected.amount ?? codSummary.codCollected;
+    final creditAmount = summary?.payments.creditDelivered.amount ?? 0;
+
+    return _DashboardPanel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: _PanelTitle(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Money',
+                  subtitle: 'Cash, credit, and earnings',
+                ),
+              ),
+              Text(
+                earnings.netEarnings.currency,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.success,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _AmountRowTile(
+                  label: 'COD to collect',
+                  value: codToCollect.currency,
+                  icon: Icons.payments_outlined,
+                  color: AppColors.warning,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _AmountRowTile(
+                  label: 'COD collected',
+                  value: codCollected.currency,
+                  icon: Icons.price_check_outlined,
+                  color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _AmountRowTile(
+                  label: 'Credit delivered',
+                  value: creditAmount.currency,
+                  icon: Icons.credit_card_rounded,
+                  color: AppColors.info,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _AmountRowTile(
+                  label: 'Pending payout',
+                  value: earnings.pendingPayout.currency,
+                  icon: Icons.schedule_rounded,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HomePerformancePanel extends StatelessWidget {
+  final DeliveryStats stats;
+  final MobileDeliverySummary? summary;
+  final PerformanceMetrics performance;
+  final RatingSummary rating;
+
+  const HomePerformancePanel({
+    super.key,
+    required this.stats,
+    required this.summary,
+    required this.performance,
+    required this.rating,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final delivered =
+        summary?.completion.delivered ?? stats.successfulDeliveries;
+    final failed = summary?.completion.failed ?? stats.failedDeliveries;
+    final cancelled =
+        summary?.completion.cancelled ?? stats.cancelledDeliveries;
+    final totalDeliveries = summary != null
+        ? delivered + failed + cancelled
+        : stats.totalDeliveries;
+    final successRate = (summary?.completion.successRate ?? stats.successRate)
+        .clamp(0, 100)
+        .toDouble();
+
+    return _DashboardPanel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _PanelTitle(
+            icon: Icons.speed_outlined,
+            title: 'Performance',
+            subtitle: 'Delivery quality indicators',
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _HomeMetricTile(
+                  label: 'Success rate',
+                  value: '${successRate.toStringAsFixed(1)}%',
+                  icon: Icons.verified_outlined,
+                  color: AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeMetricTile(
+                  label: 'Avg time',
+                  value: '${performance.avgDeliveryTimeMinutes} min',
+                  icon: Icons.timer_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeMetricTile(
+                  label: 'Rating',
+                  value: rating.averageRating.toStringAsFixed(1),
+                  icon: Icons.star_rounded,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: successRate / 100,
+              minHeight: 7,
+              backgroundColor: AppColors.surfaceVariant,
+              valueColor: const AlwaysStoppedAnimation(AppColors.success),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$delivered successful of $totalDeliveries total deliveries',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardPanel extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _DashboardPanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _PanelTitle extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _PanelTitle({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.primary, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InlineStatus extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _InlineStatus({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeMetricTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _HomeMetricTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Icon(icon, color: color, size: 18),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                color: color,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmountRowTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _AmountRowTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 66),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _HomeActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: AppColors.primary, size: 17),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // Today's Quick Stats Card
 class TodayStatsCard extends StatelessWidget {
   final TodaySnapshot snapshot;
@@ -87,7 +714,7 @@ class TodayStatsCard extends StatelessWidget {
               Expanded(
                 child: _QuickStatItem(
                   icon: Icons.account_balance_wallet_outlined,
-                  value: snapshot.earningsToday.compactCurrency,
+                  value: snapshot.earningsToday.currency,
                   label: 'Earned',
                 ),
               ),
@@ -525,7 +1152,7 @@ class CodSummaryCard extends StatelessWidget {
               Expanded(
                 child: _CodStatItem(
                   label: 'Collected',
-                  value: codSummary.codCollected.compactCurrency,
+                  value: codSummary.codCollected.currency,
                   color: AppColors.success,
                   icon: Icons.arrow_downward,
                 ),
@@ -534,7 +1161,7 @@ class CodSummaryCard extends StatelessWidget {
               Expanded(
                 child: _CodStatItem(
                   label: 'Submitted',
-                  value: codSummary.codSubmitted.compactCurrency,
+                  value: codSummary.codSubmitted.currency,
                   color: AppColors.info,
                   icon: Icons.arrow_upward,
                 ),
@@ -543,7 +1170,7 @@ class CodSummaryCard extends StatelessWidget {
               Expanded(
                 child: _CodStatItem(
                   label: 'Pending',
-                  value: codSummary.codPending.compactCurrency,
+                  value: codSummary.codPending.currency,
                   color: AppColors.warning,
                   icon: Icons.schedule,
                 ),
@@ -678,7 +1305,7 @@ class MobileSummaryCard extends StatelessWidget {
               Expanded(
                 child: _SummaryStat(
                   label: 'COD Due',
-                  value: summary.payments.codToCollect.amount.compactCurrency,
+                  value: summary.payments.codToCollect.amount.currency,
                   color: AppColors.warning,
                   icon: Icons.payments_outlined,
                 ),
@@ -687,7 +1314,7 @@ class MobileSummaryCard extends StatelessWidget {
               Expanded(
                 child: _SummaryStat(
                   label: 'COD Done',
-                  value: summary.payments.codCollected.amount.compactCurrency,
+                  value: summary.payments.codCollected.amount.currency,
                   color: AppColors.success,
                   icon: Icons.price_check_outlined,
                 ),
@@ -696,8 +1323,7 @@ class MobileSummaryCard extends StatelessWidget {
               Expanded(
                 child: _SummaryStat(
                   label: 'Credit',
-                  value:
-                      summary.payments.creditDelivered.amount.compactCurrency,
+                  value: summary.payments.creditDelivered.amount.currency,
                   color: AppColors.info,
                   icon: Icons.credit_card,
                 ),
@@ -931,7 +1557,7 @@ class _CustomerPaymentRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            customer.amount.compactCurrency,
+            customer.amount.currency,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,

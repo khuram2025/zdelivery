@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/loading_overlay.dart';
 import '../../../../core/widgets/order_card.dart';
 import '../providers/orders_provider.dart';
+import '../widgets/orders_map_view.dart';
 
 class PendingOrdersScreen extends ConsumerStatefulWidget {
   const PendingOrdersScreen({super.key});
@@ -15,6 +16,8 @@ class PendingOrdersScreen extends ConsumerStatefulWidget {
 }
 
 class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
+  bool _isMapView = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +38,7 @@ class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final pendingState = ref.watch(pendingOrdersProvider);
+    final hasOrders = pendingState.orders.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -44,6 +48,14 @@ class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          if (hasOrders)
+            IconButton(
+              icon: Icon(_isMapView ? Icons.list : Icons.map_outlined),
+              tooltip: _isMapView ? 'List View' : 'Map View',
+              onPressed: () => setState(() => _isMapView = !_isMapView),
+            ),
+        ],
       ),
       body: pendingState.isLoading
           ? ListView.builder(
@@ -92,43 +104,55 @@ class _PendingOrdersScreenState extends ConsumerState<PendingOrdersScreen> {
                     ),
                   ),
                 )
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    await ref
-                        .read(pendingOrdersProvider.notifier)
-                        .loadPendingOrders();
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(top: 8, bottom: 24),
-                    itemCount: pendingState.orders.length,
-                    itemBuilder: (context, index) {
-                      final order = pendingState.orders[index];
-                      return OrderCard(
-                        order: order,
-                        showActions: true,
-                        onTap: () => context.push('/orders/${order.id}'),
-                        onAccept: () async {
-                          final notifier =
-                              ref.read(orderDetailProvider(order.id).notifier);
-                          final success = await notifier.acceptOrder();
-                          if (success) {
-                            ref
-                                .read(pendingOrdersProvider.notifier)
-                                .removeOrder(order.id);
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order accepted successfully'),
-                                backgroundColor: AppColors.success,
-                              ),
-                            );
-                          }
+              : _isMapView
+                  ? OrdersMapView(
+                      orders: pendingState.orders,
+                      onOrderTapped: (order) async {
+                        await context.push('/orders/${order.id}');
+                        if (!context.mounted) return;
+                        ref
+                            .read(pendingOrdersProvider.notifier)
+                            .loadPendingOrders();
+                      },
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        await ref
+                            .read(pendingOrdersProvider.notifier)
+                            .loadPendingOrders();
+                      },
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(top: 8, bottom: 24),
+                        itemCount: pendingState.orders.length,
+                        itemBuilder: (context, index) {
+                          final order = pendingState.orders[index];
+                          return OrderCard(
+                            order: order,
+                            showActions: true,
+                            onTap: () => context.push('/orders/${order.id}'),
+                            onAccept: () async {
+                              final notifier = ref
+                                  .read(orderDetailProvider(order.id).notifier);
+                              final success = await notifier.acceptOrder();
+                              if (success) {
+                                ref
+                                    .read(pendingOrdersProvider.notifier)
+                                    .removeOrder(order.id);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('Order accepted successfully'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            },
+                            onReject: () => _showRejectDialog(order.id),
+                          );
                         },
-                        onReject: () => _showRejectDialog(order.id),
-                      );
-                    },
-                  ),
-                ),
+                      ),
+                    ),
     );
   }
 }
